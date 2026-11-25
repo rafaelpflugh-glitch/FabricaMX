@@ -1,0 +1,17 @@
+# Ambiente virtual e cache Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos temporários e vídeos gerados localmente
+temp/*
+!temp/.gitkeep
+output/*
+!output/.gitkeep
+
+# Sistema operacional / IDEs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

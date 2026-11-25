@@ -1,0 +1,2 @@
+Coloque aqui clipes curtos (.mp4, 5 a 8 segundos) gerados no Google Flow ou similares.
+Quando a opção "Usar intro do Flow" estiver ativa, os primeiros 5 segundos de um clipe aleatório serão usados como abertura do vídeo.

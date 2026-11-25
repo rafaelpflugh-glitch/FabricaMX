@@ -1,0 +1,2 @@
+Coloque aqui sua logo/marca d'água em formato .png com fundo transparente (opcional).
+Se houver um arquivo .png nesta pasta, ele será aplicado discretamente no canto superior direito do vídeo.
