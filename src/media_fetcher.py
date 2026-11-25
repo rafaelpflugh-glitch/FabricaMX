@@ -10,7 +10,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 import requests
-from PIL import Image, ImageEnhance, ImageOps, ImageStat
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps, ImageStat
 
 from src import normalize_text
 
@@ -254,7 +254,13 @@ def _looks_like_real_scene(img: Image.Image) -> bool:
     return white_corners < 3
 
 
-def _download_and_validate_image(url: str, title: str = "", niche_id: str = "", timeout: int = 12) -> Image.Image | None:
+def _download_and_validate_image(
+    url: str,
+    title: str = "",
+    niche_id: str = "",
+    strict_hd: bool = True,
+    timeout: int = 12,
+) -> Image.Image | None:
     if not url or not url.startswith("http") or _is_blocked_candidate(url, title, niche_id=niche_id):
         return None
 
@@ -268,7 +274,8 @@ def _download_and_validate_image(url: str, title: str = "", niche_id: str = "", 
             return None
 
         raw_bytes = resp.content
-        if len(raw_bytes) < 12_000 or len(raw_bytes) > 15_000_000:
+        min_bytes = 45_000 if strict_hd else 28_000
+        if len(raw_bytes) < min_bytes or len(raw_bytes) > 18_000_000:
             return None
 
         with Image.open(io.BytesIO(raw_bytes)) as test_img:
@@ -287,11 +294,20 @@ def _download_and_validate_image(url: str, title: str = "", niche_id: str = "", 
             img = img.convert("RGB")
 
         w, h = img.size
-        if w < 480 or h < 320:
-            return None
+        # Exige resolução HD real para evitar borrão no crop vertical 1080x1920
+        if strict_hd:
+            # Aceita Full HD / 1440p / 4K (horizontal >= 1000px altura ou vertical >= 720x1080)
+            is_hd_landscape = h >= 1000 and w >= 1200
+            is_hd_portrait = w >= 720 and h >= 1080
+            if not (is_hd_landscape or is_hd_portrait):
+                return None
+        else:
+            # Fallback mínimo 720p (jamais aceita sub-HD borrado como 768x384)
+            if h < 720 or w < 720:
+                return None
 
         aspect = w / h
-        if aspect > 2.6 or aspect < 0.35:
+        if aspect > 2.5 or aspect < 0.35:
             return None
 
         if not _looks_like_real_scene(img):
@@ -308,21 +324,52 @@ def normalize_image_to_vertical(
     target_h: int = 1920,
     variant_pan: float = 0.5,
 ) -> Image.Image:
-    """Normaliza 100% full-bleed 1080x1920 com contraste cinematográfico vibrante."""
+    """Normaliza 100% full-bleed 1080x1920 HD com nitidez UnsharpMask e contraste vibrante."""
     fitted = ImageOps.fit(
         img,
         (target_w, target_h),
         method=Image.Resampling.LANCZOS,
         centering=(variant_pan, 0.28),
     )
-    fitted = ImageEnhance.Contrast(fitted).enhance(1.10)
-    fitted = ImageEnhance.Color(fitted).enhance(1.16)
-    fitted = ImageEnhance.Sharpness(fitted).enhance(1.10)
+    fitted = fitted.filter(ImageFilter.UnsharpMask(radius=1.3, percent=125, threshold=3))
+    fitted = ImageEnhance.Contrast(fitted).enhance(1.08)
+    fitted = ImageEnhance.Color(fitted).enhance(1.14)
     return fitted
 
 
-def _search_ddg_images(query: str, region: str = "br-pt", max_results: int = 16) -> list[tuple[str, str]]:
-    results_out: list[tuple[str, str]] = []
+def _parse_int(val: Any) -> int:
+    try:
+        return int(str(val).strip())
+    except Exception:
+        return 0
+
+
+def _hd_priority_score(w: int, h: int) -> float:
+    """Pontua imagens priorizando 4K/Full HD e menor fator de ampliação para 1080x1920."""
+    if w <= 0 or h <= 0:
+        return 0.5
+    upscale = max(1080.0 / w, 1920.0 / h)
+    # Menor upscale = mais nítida no frame vertical; bônus para fotos verticais/4K
+    score = 10.0 / max(0.5, upscale)
+    if h >= 1440:
+        score += 4.0
+    elif h >= 1080:
+        score += 2.5
+    if h >= w:
+        score += 1.5  # Fotos verticais precisam de menos recorte lateral
+    return score
+
+
+def _search_ddg_images(
+    query: str,
+    region: str = "br-pt",
+    max_results: int = 30,
+) -> list[tuple[str, str, int, int]]:
+    """
+    Busca imagens via ddgs e ordena colocando as de maior resolução (4K / Full HD / Verticais HD)
+    no topo ANTES mesmo de baixar!
+    """
+    results_out: list[tuple[str, str, int, int]] = []
     try:
         with DDGS() as ddgs:
             if _DDGS_USE_QUERY_ARG:
@@ -330,6 +377,7 @@ def _search_ddg_images(query: str, region: str = "br-pt", max_results: int = 16)
                     query=query,
                     region=region,
                     safesearch="moderate",
+                    size="Large",
                     max_results=max_results,
                 )
             else:
@@ -337,15 +385,23 @@ def _search_ddg_images(query: str, region: str = "br-pt", max_results: int = 16)
                     keywords=query,
                     region=region,
                     safesearch="moderate",
+                    size="Large",
                     max_results=max_results,
                 )
             for item in results or []:
                 img_url = item.get("image") or item.get("thumbnail")
                 title = str(item.get("title") or "")
+                w = _parse_int(item.get("width"))
+                h = _parse_int(item.get("height"))
+                # Descarta thumbnails minúsculos já nos metadados sem gastar banda
+                if w > 0 and h > 0 and (h < 720 or w < 720):
+                    continue
                 if img_url and isinstance(img_url, str) and img_url.startswith("http"):
-                    results_out.append((img_url, title))
+                    results_out.append((img_url, title, w, h))
     except Exception:
         pass
+
+    results_out.sort(key=lambda r: _hd_priority_score(r[2], r[3]), reverse=True)
     return results_out
 
 
@@ -380,11 +436,11 @@ def fetch_and_prepare_images(
     seen_hashes: list[int] = []
     tried_urls: set[str] = set()
 
-    def _try_add(url: str, title: str = "") -> bool:
+    def _try_add(url: str, title: str = "", strict_hd: bool = True) -> bool:
         if url in tried_urls:
             return False
         tried_urls.add(url)
-        img = _download_and_validate_image(url, title=title, niche_id=niche_id)
+        img = _download_and_validate_image(url, title=title, niche_id=niche_id, strict_hd=strict_hd)
         if img is None:
             return False
         dhash = _compute_dhash(img)
@@ -392,57 +448,78 @@ def fetch_and_prepare_images(
             return False
         seen_hashes.append(dhash)
         valid_raw_images.append(img)
+        quality_tag = "4K" if img.height >= 1800 else ("FullHD" if img.height >= 1000 else "HD 720p")
         _log(
             log_cb,
-            f"[MediaFetcher] Cena válida {len(valid_raw_images)}/{target_images} ({img.width}x{img.height})",
+            f"[MediaFetcher] Cena {quality_tag} {len(valid_raw_images)}/{target_images} ({img.width}x{img.height})",
         )
         return True
 
     _log(
         log_cb,
-        f"[MediaFetcher] Buscando cenas de ação ({config.get('nicho_nome', '')} | alvo: {target_images})...",
+        f"[MediaFetcher] Buscando cenas em HD/4K ({config.get('nicho_nome', '')} | alvo: {target_images})...",
     )
 
-    # 1) Imagem principal e extras da matéria
+    # 1) Imagem principal e extras da matéria (aceita >= 720p por ser foto exata da matéria)
     for direct_url in [og_image, *(article_images or [])]:
         if len(valid_raw_images) >= target_images:
             break
         if direct_url and direct_url.startswith("http"):
-            _try_add(direct_url, title=str(config.get("nicho_nome", "")))
+            _try_add(direct_url, title=str(config.get("nicho_nome", "")), strict_hd=False)
 
-    # 2) Distribui cotas equilibradas por termo na ordem do roteiro
+    # 2) Distribui cotas equilibradas por termo (priorizando 4K/FullHD primeiro, depois 720p)
     clean_terms = [sanitize_niche_query(t, config) for t in search_terms if t and t.strip()]
     per_term_quota = max(3, (target_images - len(valid_raw_images) + len(clean_terms) - 1) // max(1, len(clean_terms)))
+    fallback_720p_pool: list[tuple[str, str]] = []
 
     for idx, term in enumerate(clean_terms, start=1):
         if len(valid_raw_images) >= target_images:
             break
-        _log(log_cb, f"[MediaFetcher] Pesquisando ({idx}/{len(clean_terms)}): '{term}'")
-        found = _search_ddg_images(term, region=region, max_results=18)
+        _log(log_cb, f"[MediaFetcher] Pesquisando HD ({idx}/{len(clean_terms)}): '{term}'")
+        found = _search_ddg_images(term, region=region, max_results=30)
         added_this = 0
-        for img_url, img_title in found:
+        # 1ª passada: apenas Full HD / 4K (altura >= 1000px ou vertical >= 720x1080)
+        for img_url, img_title, mw, mh in found:
             if len(valid_raw_images) >= target_images or added_this >= per_term_quota:
                 break
-            if _try_add(img_url, title=img_title):
+            if mw > 0 and mh > 0 and not ((mh >= 1000 and mw >= 1200) or (mw >= 720 and mh >= 1080)):
+                fallback_720p_pool.append((img_url, img_title))
+                continue
+            if _try_add(img_url, title=img_title, strict_hd=True):
                 added_this += 1
+        # Se este termo não bateu a cota em 1080p+, completa com 720p do próprio termo
+        if added_this < per_term_quota and len(valid_raw_images) < target_images:
+            for img_url, img_title, _, _ in found:
+                if len(valid_raw_images) >= target_images or added_this >= per_term_quota:
+                    break
+                if _try_add(img_url, title=img_title, strict_hd=False):
+                    added_this += 1
         time.sleep(0.35)
 
-    # 3) Buscas complementares do nicho
+    # 3) Buscas complementares do nicho em Full HD / 4K
     if len(valid_raw_images) < target_images:
         for fq in config.get("imagem_fallbacks") or []:
             if len(valid_raw_images) >= target_images:
                 break
             sanitized_fq = sanitize_niche_query(fq, config)
-            _log(log_cb, f"[MediaFetcher] Busca complementar: '{sanitized_fq}'")
-            for img_url, img_title in _search_ddg_images(sanitized_fq, region=region, max_results=16):
+            _log(log_cb, f"[MediaFetcher] Busca complementar HD: '{sanitized_fq}'")
+            for img_url, img_title, _, _ in _search_ddg_images(sanitized_fq, region=region, max_results=28):
                 if len(valid_raw_images) >= target_images:
                     break
-                _try_add(img_url, title=img_title)
+                if not _try_add(img_url, title=img_title, strict_hd=True):
+                    fallback_720p_pool.append((img_url, img_title))
             time.sleep(0.35)
+
+    # 4) Completa com pool 720p se ainda faltar para atingir o alvo
+    if len(valid_raw_images) < target_images:
+        for img_url, img_title in fallback_720p_pool:
+            if len(valid_raw_images) >= target_images:
+                break
+            _try_add(img_url, title=img_title, strict_hd=False)
 
     if not valid_raw_images:
         raise RuntimeError(
-            "Não foi possível baixar nenhuma imagem válida para o vídeo. "
+            "Não foi possível baixar nenhuma imagem HD válida para o vídeo. "
             "Verifique sua conexão com a internet ou tente novamente."
         )
 
@@ -450,10 +527,9 @@ def fetch_and_prepare_images(
     for idx, raw_img in enumerate(valid_raw_images[:max_images]):
         norm_img = normalize_image_to_vertical(raw_img, target_w=target_w, target_h=target_h)
         out_path = images_dir / f"img_{idx:02d}.jpg"
-        norm_img.save(out_path, format="JPEG", quality=93, optimize=True)
+        norm_img.save(out_path, format="JPEG", quality=96, subsampling=0, optimize=True)
         saved_paths.append(out_path)
 
-    # Garantia final caso falte alguma cena para atingir min_images
     if len(saved_paths) < min_images:
         pan_offsets = [0.22, 0.78, 0.35, 0.65]
         src_idx = 0
@@ -462,7 +538,7 @@ def fetch_and_prepare_images(
             pan = pan_offsets[len(saved_paths) % len(pan_offsets)]
             norm_img = normalize_image_to_vertical(base_img, target_w=target_w, target_h=target_h, variant_pan=pan)
             out_path = images_dir / f"img_{len(saved_paths):02d}.jpg"
-            norm_img.save(out_path, format="JPEG", quality=93, optimize=True)
+            norm_img.save(out_path, format="JPEG", quality=96, subsampling=0, optimize=True)
             saved_paths.append(out_path)
             src_idx += 1
 

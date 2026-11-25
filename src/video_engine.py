@@ -593,7 +593,7 @@ def render_video(
 
             filter_lines.append(
                 f"[{in_idx}:v]"
-                f"scale={up_w}:{up_h}:flags=bicubic,"
+                f"scale={up_w}:{up_h}:flags=lanczos,"
                 f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
                 f"d={seg_frames}:s={width}x{height}:fps={fps},"
                 f"setpts=PTS-STARTPTS,settb=AVTB,fps={fps},format=yuv420p,setsar=1[{label}]"
@@ -691,7 +691,7 @@ def render_video(
         "-preset",
         "medium",
         "-crf",
-        "20",
+        "18",
         "-pix_fmt",
         "yuv420p",
         "-c:a",
