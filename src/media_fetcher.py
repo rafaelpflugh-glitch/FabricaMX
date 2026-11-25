@@ -1,4 +1,4 @@
-"""Módulo de busca rigorosa, validação anti-lixo e normalização full-bleed 1080x1920 de fotos de futebol."""
+"""Módulo multi-nicho de busca de fotos de ação, filtro anti-lixo e normalização full-bleed 1080x1920."""
 
 from __future__ import annotations
 
@@ -55,6 +55,7 @@ BLOCKED_DOMAINS = (
     "instagram.com",
     "amazon.",
     "mercadolibre.",
+    "mercadolivre.",
     "ebay.",
     "etsy.",
     "aliexpress.",
@@ -67,7 +68,6 @@ BLOCKED_DOMAINS = (
     "nationalgeographic.",
 )
 
-# Palavras proibidas em URL ou título da imagem (elimina mapas, iluminati, vetores, animais, lojas)
 BANNED_IMAGE_TOKENS = (
     "mapa",
     "map of",
@@ -87,9 +87,6 @@ BANNED_IMAGE_TOKENS = (
     "ojo que todo lo ve",
     "vector",
     "clipart",
-    "cartoon",
-    "caricatura",
-    "dibujo",
     "coloring",
     "silhouette",
     "silueta",
@@ -101,9 +98,6 @@ BANNED_IMAGE_TOKENS = (
     "diagram",
     "chart",
     "graph",
-    "screenshot",
-    "captura",
-    "wallpaper logo",
     "escudo png",
     "logo png",
     "transparent png",
@@ -112,7 +106,7 @@ BANNED_IMAGE_TOKENS = (
     "comprar",
     "precio",
     "playera venta",
-    "animal",
+    "camiseta venda",
     "wildlife",
     "zoo",
     "bengal tiger",
@@ -123,7 +117,6 @@ BANNED_IMAGE_TOKENS = (
     "chiva animal",
     "puma animal",
     "cougar",
-    "lion animal",
     "meme",
     "cemetery",
     "cementerio",
@@ -142,7 +135,7 @@ BANNED_IMAGE_TOKENS = (
     "wooden cross",
 )
 
-CLUB_DISAMBIGUATION = [
+FOOTBALL_CLUB_DISAMBIGUATION = [
     (r"\bcross\s+azul\b", "Cruz Azul"),
     (r"\bam[eé]rica\b", "Club America"),
     (r"\btigres\b", "Tigres UANL"),
@@ -155,58 +148,51 @@ CLUB_DISAMBIGUATION = [
     (r"\bmonterrey\b", "Rayados Monterrey"),
 ]
 
-FOOTBALL_ANCHORS = (
-    "futbol",
-    "soccer",
-    "liga mx",
-    "estadio",
-    "partido",
-    "jugador",
-    "aficion",
-    "cancha",
-    "gol",
-    "portero",
-    "entrenador",
-    "clasico",
-)
-
 
 def _log(log_cb: LogCallback | None, msg: str) -> None:
     if log_cb:
         log_cb(msg)
 
 
-def sanitize_football_query(raw_query: str, club_focus: str = "Club América") -> str:
+def sanitize_niche_query(raw_query: str, config: dict[str, Any]) -> str:
     """
-    Garante que toda busca de imagem seja 100% ancorada em fotografia real de futebol mexicano,
-    evitando resultados absurdos (mapas da América, tigres animais, símbolos iluminati, etc.).
+    Garante que toda busca de imagem esteja fortemente ancorada no nicho ativo
+    (ex.: lances/jogadores de Liga MX ou cenas reais 4K de GTA VI), evitando mapas e lixo.
     """
+    niche_id = str(config.get("nicho_ativo", "futebol_mexicano"))
+    foco = str(config.get("clube_foco") or config.get("nicho_nome") or "")
+    anchors = [normalize_text(a) for a in (config.get("imagem_ancoras") or []) if a]
+    suffix = str(config.get("imagem_sufixo_padrao") or "").strip()
+
     q = re.sub(r"\s+", " ", (raw_query or "").strip())
     norm = normalize_text(q)
 
-    # Se vier uma palavra genérica demais ("clubes", "futbol mexicano"), ancora no clube foco
-    if len(norm.split()) <= 1 or norm in ("clubes", "equipos", "mexico", "futbol", "liga mx"):
-        q = f"{club_focus} jugadores estadio partido Liga MX"
+    if len(norm.split()) <= 1 or norm in ("clubes", "equipos", "mexico", "jogo", "game"):
+        q = f"{foco} {suffix}".strip()
         norm = normalize_text(q)
 
-    # Desambigua nomes de clubes que têm homônimos (América=continente, Tigres=animal, Atlas=mapa!)
-    for pattern, replacement in CLUB_DISAMBIGUATION:
-        if re.search(pattern, norm) and normalize_text(replacement) not in norm:
-            q = re.sub(pattern, replacement, q, flags=re.IGNORECASE)
-            norm = normalize_text(q)
-
-    # Garante âncora de futebol mexicano (Liga MX) em toda busca
-    if "liga mx" not in norm:
-        if any(anchor in norm for anchor in FOOTBALL_ANCHORS):
-            q = f"{q} Liga MX"
-        else:
-            q = f"{q} futbol partido Liga MX"
+    if niche_id == "futebol_mexicano":
+        for pattern, replacement in FOOTBALL_CLUB_DISAMBIGUATION:
+            if re.search(pattern, norm) and normalize_text(replacement) not in norm:
+                q = re.sub(pattern, replacement, q, flags=re.IGNORECASE)
+                norm = normalize_text(q)
+        if "liga mx" not in norm:
+            q = f"{q} partido Liga MX"
+        if not any(w in norm for w in ("gol", "jugad", "celebr", "atajad", "partido", "cancha", "campeon", "trofeo")):
+            q = f"{q} jugadores accion"
+    elif niche_id == "gta_vi":
+        if "gta" not in norm and "grand theft auto" not in norm:
+            q = f"GTA 6 {q}"
+        if "vice city" not in norm and "leonida" not in norm and "rockstar" not in norm:
+            q = f"{q} Rockstar Games Vice City"
+    else:
+        if anchors and not any(a in norm for a in anchors) and suffix:
+            q = f"{q} {suffix}"
 
     return q.strip()
 
 
 def _compute_dhash(img: Image.Image, hash_size: int = 8) -> int:
-    """Calcula perceptual dHash rápido para evitar imagens duplicadas."""
     resized = img.convert("L").resize((hash_size + 1, hash_size), Image.Resampling.BILINEAR)
     getter = getattr(resized, "get_flattened_data", resized.getdata)
     pixels = list(getter())
@@ -223,8 +209,7 @@ def _hamming_distance(h1: int, h2: int) -> int:
     return (h1 ^ h2).bit_count()
 
 
-def _is_blocked_candidate(url: str, title: str = "") -> bool:
-    """Filtra URLs e títulos que indiquem mapas, vetores, lojas, símbolos ou não-futebol."""
+def _is_blocked_candidate(url: str, title: str = "", niche_id: str = "") -> bool:
     try:
         host = urlparse(url).netloc.lower()
     except Exception:
@@ -242,23 +227,23 @@ def _is_blocked_candidate(url: str, title: str = "") -> bool:
     if any(tok in combined for tok in BANNED_IMAGE_TOKENS):
         return True
 
+    # No nicho GTA VI, bloqueia capas/artes antigas do GTA V / GTA Online
+    if niche_id == "gta_vi":
+        has_gta6 = any(k in combined for k in ("gta 6", "gta6", "gta vi", "gtavi", "leonida", "lucia"))
+        has_old_gta = any(k in combined for k in ("gta v", "gta 5", "gtav", "gta5", "gta-v", "gta-5", "gta online", "san andreas", "gta iv", "gta 4"))
+        if has_old_gta and not has_gta6:
+            return True
+
     return False
 
 
-def _looks_like_real_photo(img: Image.Image) -> bool:
-    """
-    Heurística leve para descartar gráficos chapados, logos sobre fundo branco
-    ou mapas vetoriais simples que escapem pelo filtro textual.
-    """
+def _looks_like_real_scene(img: Image.Image) -> bool:
+    """Descarta gráficos chapados, recortes de fundo branco ou mapas vetoriais simples."""
     small = img.resize((64, 64), Image.Resampling.BILINEAR)
     stat = ImageStat.Stat(small)
-
-    # Desvio padrão muito baixo em todos os canais => imagem chapada/texto/gráfico simples
-    avg_stddev = sum(stat.stddev) / 3.0
-    if avg_stddev < 24.0:
+    if (sum(stat.stddev) / 3.0) < 22.0:
         return False
 
-    # Verifica se os 4 cantos são praticamente branco puro (recorte de loja/logo/mapa)
     corners = [
         small.getpixel((2, 2)),
         small.getpixel((61, 2)),
@@ -266,15 +251,11 @@ def _looks_like_real_photo(img: Image.Image) -> bool:
         small.getpixel((61, 61)),
     ]
     white_corners = sum(1 for r, g, b in corners if r > 242 and g > 242 and b > 242)
-    if white_corners >= 3:
-        return False
-
-    return True
+    return white_corners < 3
 
 
-def _download_and_validate_image(url: str, title: str = "", timeout: int = 12) -> Image.Image | None:
-    """Baixa uma imagem e valida integridade, resolução mínima e aparência fotográfica com Pillow."""
-    if not url or not url.startswith("http") or _is_blocked_candidate(url, title):
+def _download_and_validate_image(url: str, title: str = "", niche_id: str = "", timeout: int = 12) -> Image.Image | None:
+    if not url or not url.startswith("http") or _is_blocked_candidate(url, title, niche_id=niche_id):
         return None
 
     try:
@@ -287,7 +268,7 @@ def _download_and_validate_image(url: str, title: str = "", timeout: int = 12) -
             return None
 
         raw_bytes = resp.content
-        if len(raw_bytes) < 12_000 or len(raw_bytes) > 14_000_000:
+        if len(raw_bytes) < 12_000 or len(raw_bytes) > 15_000_000:
             return None
 
         with Image.open(io.BytesIO(raw_bytes)) as test_img:
@@ -296,11 +277,9 @@ def _download_and_validate_image(url: str, title: str = "", timeout: int = 12) -
         img = Image.open(io.BytesIO(raw_bytes))
         img = ImageOps.exif_transpose(img)
 
-        # Descarta PNGs com transparência dominante (logos/ícones)
         if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
             rgba = img.convert("RGBA")
-            alpha = rgba.getchannel("A")
-            alpha_stat = ImageStat.Stat(alpha)
+            alpha_stat = ImageStat.Stat(rgba.getchannel("A"))
             if alpha_stat.mean[0] < 245:
                 return None
             img = rgba.convert("RGB")
@@ -315,7 +294,7 @@ def _download_and_validate_image(url: str, title: str = "", timeout: int = 12) -
         if aspect > 2.6 or aspect < 0.35:
             return None
 
-        if not _looks_like_real_photo(img):
+        if not _looks_like_real_scene(img):
             return None
 
         return img
@@ -329,39 +308,34 @@ def normalize_image_to_vertical(
     target_h: int = 1920,
     variant_pan: float = 0.5,
 ) -> Image.Image:
-    """
-    Normaliza para 1080x1920 FULL-BLEED estilo @yaguilas1 (tela cheia sem barras nem molduras borradas),
-    com enquadramento focado no terço superior (preserva rostos, jogadores e arquibancadas)
-    e color grading esportivo vibrante.
-    """
+    """Normaliza 100% full-bleed 1080x1920 com contraste cinematográfico vibrante."""
     fitted = ImageOps.fit(
         img,
         (target_w, target_h),
         method=Image.Resampling.LANCZOS,
         centering=(variant_pan, 0.28),
     )
-    fitted = ImageEnhance.Contrast(fitted).enhance(1.09)
-    fitted = ImageEnhance.Color(fitted).enhance(1.14)
+    fitted = ImageEnhance.Contrast(fitted).enhance(1.10)
+    fitted = ImageEnhance.Color(fitted).enhance(1.16)
     fitted = ImageEnhance.Sharpness(fitted).enhance(1.10)
     return fitted
 
 
-def _search_ddg_images(query: str, max_results: int = 14) -> list[tuple[str, str]]:
-    """Busca lista de (url, titulo) via ddgs com tratamento de erros."""
+def _search_ddg_images(query: str, region: str = "br-pt", max_results: int = 16) -> list[tuple[str, str]]:
     results_out: list[tuple[str, str]] = []
     try:
         with DDGS() as ddgs:
             if _DDGS_USE_QUERY_ARG:
                 results = ddgs.images(
                     query=query,
-                    region="mx-es",
+                    region=region,
                     safesearch="moderate",
                     max_results=max_results,
                 )
             else:
                 results = ddgs.images(
                     keywords=query,
-                    region="mx-es",
+                    region=region,
                     safesearch="moderate",
                     max_results=max_results,
                 )
@@ -384,17 +358,21 @@ def fetch_and_prepare_images(
     log_cb: LogCallback | None = None,
 ) -> list[Path]:
     """
-    Baixa, valida (anti-mapas/anti-vetores/anti-duplicatas) e normaliza 14 a 18 fotos reais
-    em full-bleed 1080x1920 distribuídas na ordem dos termos do roteiro.
+    Baixa, valida (anti-mapas/anti-lixo/anti-duplicatas) e normaliza 18 a 24 cenas full-bleed
+    em 1080x1920 para cortes rápidos de 2.4–3.2s com retenção máxima.
     """
     video_cfg = config.get("video", {})
     target_w = int(video_cfg.get("largura", 1080))
     target_h = int(video_cfg.get("altura", 1920))
-    min_images = max(10, int(video_cfg.get("num_imagens_min", 14)))
-    max_images = max(min_images, int(video_cfg.get("num_imagens_max", 18)))
-    target_images = max(min_images, min(max_images, int(video_cfg.get("num_imagens_alvo", 16))))
+    min_images = max(12, int(video_cfg.get("num_cenas_min", video_cfg.get("num_imagens_min", 18))))
+    max_images = max(min_images, int(video_cfg.get("num_cenas_max", video_cfg.get("num_imagens_max", 24))))
+    target_images = max(
+        min_images,
+        min(max_images, int(video_cfg.get("num_cenas_alvo", video_cfg.get("num_imagens_alvo", 20)))),
+    )
 
-    club_focus = config.get("clube_foco", "Club América")
+    region = str(config.get("ddgs_regiao", "br-pt"))
+    niche_id = str(config.get("nicho_ativo", ""))
     images_dir = output_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
 
@@ -406,7 +384,7 @@ def fetch_and_prepare_images(
         if url in tried_urls:
             return False
         tried_urls.add(url)
-        img = _download_and_validate_image(url, title=title)
+        img = _download_and_validate_image(url, title=title, niche_id=niche_id)
         if img is None:
             return False
         dhash = _compute_dhash(img)
@@ -416,55 +394,47 @@ def fetch_and_prepare_images(
         valid_raw_images.append(img)
         _log(
             log_cb,
-            f"[MediaFetcher] Foto real válida {len(valid_raw_images)}/{target_images} "
-            f"({img.width}x{img.height})",
+            f"[MediaFetcher] Cena válida {len(valid_raw_images)}/{target_images} ({img.width}x{img.height})",
         )
         return True
 
     _log(
         log_cb,
-        f"[MediaFetcher] Buscando fotos reais de futebol (alvo: {target_images}, mín: {min_images}, máx: {max_images})...",
+        f"[MediaFetcher] Buscando cenas de ação ({config.get('nicho_nome', '')} | alvo: {target_images})...",
     )
 
-    # 1) Primeiro tenta a imagem principal e extras da própria matéria
+    # 1) Imagem principal e extras da matéria
     for direct_url in [og_image, *(article_images or [])]:
         if len(valid_raw_images) >= target_images:
             break
-        if direct_url:
-            _try_add(direct_url, title=f"{club_focus} Liga MX")
+        if direct_url and direct_url.startswith("http"):
+            _try_add(direct_url, title=str(config.get("nicho_nome", "")))
 
-    # 2) Distribui cotas por termo de busca na ordem do roteiro (ideal para Top 5 e notícias!)
-    clean_terms = [sanitize_football_query(t, club_focus) for t in search_terms if t and t.strip()]
-    per_term_quota = max(2, (target_images - len(valid_raw_images) + len(clean_terms) - 1) // max(1, len(clean_terms)))
+    # 2) Distribui cotas equilibradas por termo na ordem do roteiro
+    clean_terms = [sanitize_niche_query(t, config) for t in search_terms if t and t.strip()]
+    per_term_quota = max(3, (target_images - len(valid_raw_images) + len(clean_terms) - 1) // max(1, len(clean_terms)))
 
     for idx, term in enumerate(clean_terms, start=1):
         if len(valid_raw_images) >= target_images:
             break
         _log(log_cb, f"[MediaFetcher] Pesquisando ({idx}/{len(clean_terms)}): '{term}'")
-        found = _search_ddg_images(term, max_results=14)
-        added_this_term = 0
+        found = _search_ddg_images(term, region=region, max_results=18)
+        added_this = 0
         for img_url, img_title in found:
-            if len(valid_raw_images) >= target_images or added_this_term >= per_term_quota:
+            if len(valid_raw_images) >= target_images or added_this >= per_term_quota:
                 break
             if _try_add(img_url, title=img_title):
-                added_this_term += 1
+                added_this += 1
         time.sleep(0.35)
 
-    # 3) Buscas complementares de estádios/torcidas/partidas da Liga MX caso ainda falte
+    # 3) Buscas complementares do nicho
     if len(valid_raw_images) < target_images:
-        fallback_queries = [
-            f"{club_focus} aficion estadio lleno futbol Liga MX",
-            f"{club_focus} jugadores celebrando gol partido Liga MX",
-            "Estadio Azteca aficion noche futbol Liga MX",
-            "Liga MX partido estadio lleno torcida futbol mexicano",
-            "Clásico Nacional Club America vs Chivas partido futbol",
-        ]
-        for fq in fallback_queries:
+        for fq in config.get("imagem_fallbacks") or []:
             if len(valid_raw_images) >= target_images:
                 break
-            sanitized_fq = sanitize_football_query(fq, club_focus)
+            sanitized_fq = sanitize_niche_query(fq, config)
             _log(log_cb, f"[MediaFetcher] Busca complementar: '{sanitized_fq}'")
-            for img_url, img_title in _search_ddg_images(sanitized_fq, max_results=14):
+            for img_url, img_title in _search_ddg_images(sanitized_fq, region=region, max_results=16):
                 if len(valid_raw_images) >= target_images:
                     break
                 _try_add(img_url, title=img_title)
@@ -472,11 +442,10 @@ def fetch_and_prepare_images(
 
     if not valid_raw_images:
         raise RuntimeError(
-            "Não foi possível baixar nenhuma foto válida de futebol. "
+            "Não foi possível baixar nenhuma imagem válida para o vídeo. "
             "Verifique sua conexão com a internet ou tente novamente."
         )
 
-    # Normaliza todas para 1080x1920 full-bleed
     saved_paths: list[Path] = []
     for idx, raw_img in enumerate(valid_raw_images[:max_images]):
         norm_img = normalize_image_to_vertical(raw_img, target_w=target_w, target_h=target_h)
@@ -484,12 +453,8 @@ def fetch_and_prepare_images(
         norm_img.save(out_path, format="JPEG", quality=93, optimize=True)
         saved_paths.append(out_path)
 
-    # Garantia final caso falte alguma cena para atingir o mínimo
+    # Garantia final caso falte alguma cena para atingir min_images
     if len(saved_paths) < min_images:
-        _log(
-            log_cb,
-            f"[MediaFetcher] Complementando enquadramentos ({len(saved_paths)} -> {min_images} cenas)...",
-        )
         pan_offsets = [0.22, 0.78, 0.35, 0.65]
         src_idx = 0
         while len(saved_paths) < min_images:
@@ -501,5 +466,5 @@ def fetch_and_prepare_images(
             saved_paths.append(out_path)
             src_idx += 1
 
-    _log(log_cb, f"[MediaFetcher] {len(saved_paths)} fotos full-bleed normalizadas em {target_w}x{target_h}.")
+    _log(log_cb, f"[MediaFetcher] {len(saved_paths)} cenas full-bleed prontas em {target_w}x{target_h}.")
     return saved_paths

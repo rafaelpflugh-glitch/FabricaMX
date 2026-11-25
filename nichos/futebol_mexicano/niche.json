@@ -1,0 +1,126 @@
+{
+  "id": "futebol_mexicano",
+  "nome": "Futebol Mexicano (Liga MX)",
+  "etiqueta": "LIGA MX • 9:16",
+  "idioma_padrao": "es-MX",
+  "vozes": [
+    { "id": "es-MX-JorgeNeural", "label": "ES-MX • Jorge (Masculino)", "idioma": "es-MX" },
+    { "id": "es-MX-DaliaNeural", "label": "ES-MX • Dalia (Feminino)", "idioma": "es-MX" }
+  ],
+  "voz_padrao": "es-MX-JorgeNeural",
+  "foco_padrao": "Club América",
+  "presets_foco": {
+    "Club América": ["Club América", "América", "Águilas", "Coapa", "Jardine", "Liga MX"],
+    "Chivas": ["Chivas", "Guadalajara", "Rebaño Sagrado", "Akron", "Liga MX"],
+    "Cruz Azul": ["Cruz Azul", "La Máquina", "Celestes", "La Noria", "Liga MX"],
+    "Tigres": ["Tigres", "UANL", "Felinos", "Volcán", "Gignac", "Liga MX"],
+    "Liga MX Geral": ["Liga MX", "Fútbol Mexicano", "Selección Mexicana", "Liguilla", "Clausura", "Apertura"]
+  },
+  "ddgs_regiao": "mx-es",
+  "ddgs_news_sufixo": "Liga MX noticias",
+  "rss_feeds": [
+    {
+      "nome": "Mediotiempo / Récord / ESPN MX",
+      "url": "https://news.google.com/rss/search?q=(site:mediotiempo.com+OR+site:record.com.mx+OR+site:espn.com.mx)+Liga+MX+when:5d&hl=es-419&gl=MX&ceid=MX:es-419"
+    },
+    {
+      "nome": "Google News Liga MX",
+      "url": "https://news.google.com/rss/search?q=Liga+MX+futbol+when:4d&hl=es-419&gl=MX&ceid=MX:es-419"
+    }
+  ],
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 88,
+    "cor_ativa": "#00F0FF",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 11,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 5,
+    "margem_inferior": 0
+  },
+  "imagem_ancoras": ["futbol", "soccer", "liga mx", "jugador", "gol", "partido", "cancha", "remate", "celebracion", "portero", "estadio"],
+  "imagem_sufixo_padrao": "jugadores gol accion partido Liga MX",
+  "imagem_fallbacks": [
+    "Club America jugadores celebrando gol partido Liga MX",
+    "Henry Martin Club America remate gol partido Liga MX",
+    "Clasico Nacional Club America vs Chivas jugada partido Liga MX",
+    "Andre Pierre Gignac Tigres UANL celebrando gol Liga MX",
+    "Cruz Azul jugadores celebrando gol cancha Liga MX",
+    "Portero atajada espectacular partido futbol Liga MX"
+  ],
+  "prompt_contexto": {
+    "persona_es": "Eres el creador viral más explosivo de TikTok sobre fútbol mexicano (Liga MX), con ritmo de debate apasionado, frases cortas que enganchan al segundo y cero relleno.",
+    "regras_fatos": "En la Liga MX actual NO existe el descenso. Usa solo datos reales de jugadores, clubes y partidos. Prioriza acciones, goles, jugadas polémicas y rivalidades.",
+    "cta_meio_es": "Pero antes de revelarte el cierre, sígueme porque aquí solo sale lo más caliente del fútbol mexicano.",
+    "hashtags_padrao": ["#LigaMX", "#FutbolMexicano", "#ClubAmerica", "#TikTokDeportes", "#FutbolMX"]
+  },
+  "top5_banco": [
+    {
+      "slug": "top5_goles_mas_espectaculares_club_america",
+      "tema": "Los 5 goles más espectaculares y gritados del Club América en finales de Liga MX",
+      "foco": "Puesto 5: Gol de cabeza de Moisés Muñoz en la final del Clausura 2013 al minuto 92 contra Cruz Azul bajo la lluvia del Azteca. Puesto 4: Penal decisivo de Henry Martín en la final del Clausura 2024 contra Cruz Azul que selló el bicampeonato. Puesto 3: Golazo de Richard Sánchez en la final del Apertura 2024 frente a Rayados en Monterrey que abrió el camino al tricampeonato. Puesto 2: Gol de Julián Quiñones en la final del Apertura 2023 contra Tigres para desatar la locura en el Azteca. Puesto 1: El golazo histórico de chilena y carácter de Cuauhtémoc Blanco en el Clásico y finales que marcó a toda una generación americanista.",
+      "queries": [
+        "Club America jugadores celebrando gol partido Liga MX",
+        "Moises Munoz gol cabeza final Cruz Azul Club America Liga MX",
+        "Henry Martin gol penal celebracion Club America final Liga MX",
+        "Richard Sanchez golazo Club America Monterrey final Liga MX",
+        "Julian Quinones gol celebracion Club America Tigres Liga MX",
+        "Cuauhtemoc Blanco gol celebracion Club America Liga MX"
+      ]
+    },
+    {
+      "slug": "top5_extranjeros_mas_letales_liga_mx",
+      "tema": "Los 5 futbolistas extranjeros más letales que destrozaron defensas en la Liga MX",
+      "foco": "Puesto 5: Christian Chucho Benítez, máquina de goles y tricampeón de goleo con el Club América. Puesto 4: Humberto Chupete Suazo, delantero imparable que cargó a Rayados de Monterrey en finales épicas. Puesto 3: Evanivaldo Castro Cabinho, máximo artillero en la historia del fútbol mexicano con 312 goles. Puesto 2: André-Pierre Gignac, leyenda francesa de Tigres con más de 200 goles y múltiples campeonatos. Puesto 1: José Saturnino Cardozo, el Diablo Mayor del Toluca, autor del récord salvaje de 29 goles en un solo torneo corto.",
+      "queries": [
+        "Delanteros celebrando gol partido futbol Liga MX",
+        "Christian Chucho Benitez Club America celebrando gol Liga MX",
+        "Humberto Chupete Suazo Rayados Monterrey gol partido Liga MX",
+        "Cabinho Pumas UNAM delantero remate gol futbol mexicano",
+        "Andre Pierre Gignac Tigres UANL celebrando golazo Liga MX",
+        "Jose Saturnino Cardozo Toluca celebrando gol Liga MX"
+      ]
+    },
+    {
+      "slug": "top5_clasicos_mas_calientes_mexico",
+      "tema": "Las 5 rivalidades más calientes y explosivas del fútbol mexicano",
+      "foco": "Puesto 5: Clásico Tapatío entre Chivas y Atlas, duelo con más de cien años de historia que enciende Guadalajara. Puesto 4: Clásico Capitalino entre América y Pumas, entradas duras, goles memorables y orgullo puro en Ciudad de México. Puesto 3: Clásico Joven entre América y Cruz Azul, el choque de las finales más dramáticas del siglo. Puesto 2: Clásico Regio entre Tigres y Rayados, planteles millonarios chocando a muerte en Monterrey. Puesto 1: El Clásico Nacional entre Club América y Chivas, el partido que paraliza a todo México y divide familias enteras.",
+      "queries": [
+        "Jugadores duelo balon partido intenso futbol Liga MX",
+        "Chivas vs Atlas Clasico Tapatio jugadores jugada Liga MX",
+        "Club America vs Pumas UNAM jugadores duelo partido Liga MX",
+        "Club America vs Cruz Azul final jugadores partido Liga MX",
+        "Tigres UANL vs Rayados Monterrey jugadores partido Liga MX",
+        "Club America vs Chivas Guadalajara Clasico Nacional jugada Liga MX"
+      ]
+    },
+    {
+      "slug": "top5_equipos_mas_ganadores_liga_mx",
+      "tema": "Los 5 clubes con más títulos de Liga MX en la historia del fútbol mexicano",
+      "foco": "Puesto 5: Tigres UANL con 8 títulos de liga, el monstruo moderno del norte que dominó la última década. Puesto 4: Cruz Azul con 9 campeonatos y generaciones de ídolos celestes. Puesto 3: Deportivo Toluca con 10 títulos, los Diablos Rojos temidos en la altura de La Bombonera. Puesto 2: Chivas de Guadalajara con 12 campeonatos jugando únicamente con futbolistas mexicanos. Puesto 1: Club América, el rey absoluto de México con 16 títulos de Liga MX tras lograr un histórico tricampeonato.",
+      "queries": [
+        "Campeon levantando trofeo Liga MX jugadores celebracion",
+        "Tigres UANL campeon trofeo jugadores celebrando Liga MX",
+        "Cruz Azul campeon trofeo jugadores celebrando Liga MX",
+        "Deportivo Toluca jugadores celebrando gol Liga MX",
+        "Chivas Guadalajara campeon trofeo jugadores Liga MX",
+        "Club America tricampeon levantando trofeo Liga MX jugadores"
+      ]
+    },
+    {
+      "slug": "top5_porteros_mas_grandes_mexico",
+      "tema": "Los 5 porteros más espectaculares que han volado en las porterías de la Liga MX",
+      "foco": "Puesto 5: Nahuel Guzmán, figura decisiva en penales y dueño de cinco títulos con Tigres UANL. Puesto 4: Oswaldo Sánchez, reflejos felinos y capitán campeón con Chivas y Santos Laguna. Puesto 3: Miguel Marín, el Superman de Cruz Azul que revolucionó el arco mexicano en los setenta. Puesto 2: Guillermo Ochoa, atajadas imposibles en América y cinco Copas del Mundo con México. Puesto 1: Jorge Campos, el Brody, leyenda de Pumas que volaba de palo a palo y hasta jugaba de delantero.",
+      "queries": [
+        "Portero atajada espectacular volando partido Liga MX",
+        "Nahuel Guzman portero Tigres UANL atajada partido Liga MX",
+        "Oswaldo Sanchez portero atajada Chivas Liga MX",
+        "Miguel Marin portero Cruz Azul atajada futbol mexicano",
+        "Guillermo Ochoa portero atajada Club America partido",
+        "Jorge Campos portero atajada Pumas futbol mexicano"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "id": "gta_vi",
+  "nome": "GTA VI",
+  "etiqueta": "GTA VI • 9:16",
+  "idioma_padrao": "pt-BR",
+  "vozes": [
+    { "id": "pt-BR-AntonioNeural", "label": "PT-BR • Antonio (Masculino)", "idioma": "pt-BR" },
+    { "id": "pt-BR-FranciscaNeural", "label": "PT-BR • Francisca (Feminino)", "idioma": "pt-BR" },
+    { "id": "en-US-AndrewNeural", "label": "EN-US • Andrew (RPM Dólar)", "idioma": "en-US" },
+    { "id": "en-US-GuyNeural", "label": "EN-US • Guy (Energetic)", "idioma": "en-US" },
+    { "id": "es-MX-JorgeNeural", "label": "ES-MX • Jorge (LATAM)", "idioma": "es-MX" }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "GTA VI Geral",
+  "presets_foco": {
+    "GTA VI Geral": ["GTA VI", "GTA 6", "Rockstar Games", "Vice City", "Leonida", "Lucia", "Jason"],
+    "Vazamentos & Rumores": ["GTA 6 vazamento", "GTA VI leak", "Rockstar", "mapa GTA 6", "trailer 2"],
+    "Gameplay & Mapa": ["GTA 6 gameplay", "Vice City", "Leonida", "carros GTA 6", "gráficos GTA VI"],
+    "Lucia & Jason": ["Lucia GTA 6", "Jason GTA 6", "história GTA VI", "protagonistas GTA 6"]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "GTA 6 Rockstar Games noticias",
+  "rss_feeds": [
+    {
+      "nome": "Google News GTA VI (BR)",
+      "url": "https://news.google.com/rss/search?q=(%22GTA+6%22+OR+%22GTA+VI%22)+Rockstar+when:7d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    },
+    {
+      "nome": "Google News GTA VI (EN)",
+      "url": "https://news.google.com/rss/search?q=(%22GTA+6%22+OR+%22GTA+VI%22)+Rockstar+when:7d&hl=en-US&gl=US&ceid=US:en"
+    }
+  ],
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 88,
+    "cor_ativa": "#FF2ED1",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 11,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 5,
+    "margem_inferior": 0
+  },
+  "imagem_ancoras": ["gta", "grand theft auto", "rockstar", "vice city", "leonida", "lucia", "jason", "trailer", "gameplay", "screenshot"],
+  "imagem_sufixo_padrao": "GTA 6 Rockstar Games Vice City screenshot 4K",
+  "imagem_fallbacks": [
+    "GTA 6 Lucia Jason Vice City official Rockstar screenshot",
+    "GTA 6 Vice City neon night beach cars trailer screenshot",
+    "GTA 6 Leonida swamp airboat alligator trailer scene",
+    "GTA 6 police chase highway Vice City cars screenshot",
+    "GTA 6 Lucia prison jumpsuit trailer official Rockstar",
+    "GTA 6 Vice City skyline palm trees sunset neon"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é um criador viral de TikTok focado em GTA VI e Rockstar Games, com ritmo frenético, curiosidade viciante, frases curtas de altíssima retenção e linguagem gamer natural do Brasil.",
+    "persona_en": "You are a high-retention viral TikTok gaming creator covering GTA VI and Rockstar Games. Punchy short sentences, insane pacing, zero fluff, instant curiosity hooks.",
+    "persona_es": "Eres un creador viral de TikTok de videojuegos enfocado en GTA VI y Rockstar Games, ritmo rápido, suspenso brutal y cero relleno.",
+    "regras_fatos": "Foque nos detalhes confirmados pela Rockstar Games (estado de Leonida, Vice City, protagonistas Lucia e Jason, física realista, NPCs com IA avançada, trailer oficial) e deixe claro quando algo for rumor/teoria da comunidade.",
+    "cta_meio_pt": "Mas antes de ver o detalhe mais absurdo no final, já me segue porque aqui sai tudo de GTA 6 antes de todo mundo.",
+    "cta_meio_en": "Before I reveal the craziest detail at number one, hit follow for daily GTA 6 breakdowns.",
+    "cta_meio_es": "Pero antes de revelar el detalle más loco del final, sígueme porque aquí sale todo de GTA 6 al instante.",
+    "hashtags_padrao": ["#GTAVI", "#GTA6", "#RockstarGames", "#ViceCity", "#GamesTikTok", "#GamerBR"]
+  },
+  "top5_banco": [
+    {
+      "slug": "top5_detalhes_ocultos_trailer_gta6",
+      "tema": "5 detalhes absurdos no trailer de GTA VI que 99% das pessoas deixaram passar",
+      "foco": "Posição 5: A física real de fluidos e cabelos — cada gota de suor, bebida nas garrafas e fios de cabelo da Lucia reagem ao vento em tempo real. Posição 4: O sistema de redes sociais dentro do jogo imitando TikTok e Instagram com NPCs gravando crimes ao vivo. Posição 3: A tornozeleira eletrônica da Lucia na arte oficial, indicando possível restrição inicial no mapa de Leonida. Posição 2: Densidade absurda nas praias de Vice City com dezenas de NPCs fazendo atividades únicas simultaneamente sem repetir animações. Posição 1: O nível insano de destruição e reflexos em ray tracing nos espelhos retrovisores dos carros — algo que nunca existiu com precisão real no GTA V.",
+      "queries": [
+        "GTA 6 Vice City neon sunset beach trailer Rockstar",
+        "GTA 6 Lucia hair detail close up trailer screenshot",
+        "GTA 6 social media phone clip trailer Leonida",
+        "GTA 6 Lucia Jason car official artwork Rockstar",
+        "GTA 6 crowded beach NPCs Vice City trailer screenshot",
+        "GTA 6 sports car highway neon Vice City night trailer"
+      ]
+    },
+    {
+      "slug": "top5_diferencas_gta5_vs_gta6",
+      "tema": "5 diferenças insanas entre GTA V e GTA VI que vão fazer o GTA 5 parecer jogo antigo",
+      "foco": "Posição 5: O salto geracional de gráficos — GTA VI usa iluminação global e reflexos em tempo real na nova versão da engine RAGE 9. Posição 4: Vida selvagem viva de verdade nos pântanos de Leonida, com jacarés invadindo lojas e piscinas. Posição 3: Interiores muito mais exploráveis, incluindo mercados, clubes noturnos, hotéis e lojas cheias de detalhes. Posição 2: Inteligência artificial da polícia reformulada — agentes cercam perímetros, analisam câmeras e lembram do seu veículo. Posição 1: O mapa de Leonida promete ser gigantesco, misturando Vice City neon, ilhas tropicais estilo Florida Keys e pântanos imensos.",
+      "queries": [
+        "GTA 6 vs GTA 5 graphics comparison Vice City",
+        "GTA 6 Leonida swamp alligator trailer screenshot",
+        "GTA 6 nightclub neon interior Vice City trailer",
+        "GTA 6 police car chase Vice City street trailer",
+        "GTA 6 Vice City skyline ocean aerial view trailer",
+        "GTA 6 Lucia Jason robbery convenience store trailer"
+      ]
+    },
+    {
+      "slug": "top5_mecanicas_mais_esperadas_gta6",
+      "tema": "5 mecânicas realistas que podem mudar tudo na gameplay de GTA VI",
+      "foco": "Posição 5: Inventário limitado inspirado em Red Dead Redemption 2 — você não tira dez bazucas do bolso, guarda armas no porta-malas do carro. Posição 4: Dinâmica de dupla estilo Bonnie e Clyde entre Lucia e Jason, trocando de personagem instantaneamente durante assaltos coordenados. Posição 3: Clima extremo dinâmico em Leonida com furacões, tempestades tropicais e ventos que afetam a direção de barcos e aviões. Posição 2: Customização profunda do corpo, roupas e carros com impacto real na forma como os NPCs reagem a você. Posição 1: Um sistema de economia e mundo vivo onde suas ações repercutem nos jornais e nas redes sociais dentro do próprio jogo.",
+      "queries": [
+        "GTA 6 Lucia Jason armed robbery trailer Rockstar",
+        "GTA 6 car trunk muscle car Vice City street trailer",
+        "GTA 6 Vice City beach storm boats ocean trailer",
+        "GTA 6 custom lowrider cars street meet Vice City",
+        "GTA 6 Vice City neon nightlife party club trailer",
+        "GTA 6 Lucia driving convertible car Vice City sunset"
+      ]
+    },
+    {
+      "slug": "top5_lugares_insanos_mapa_leonida_gta6",
+      "tema": "5 lugares insanos do mapa de Leonida em GTA VI que você precisa conhecer",
+      "foco": "Posição 5: Grassrivers, os pântanos selvagens inspirados nos Everglades cheios de aerobarcos, lama realista e jacarés perigosos. Posição 4: Leonida Keys, o arquipélago tropical ligado por pontes gigantes sobre água cristalina perfeito para perseguições de lancha. Posição 3: Port Gellhorn, uma cidade costeira mais barra-pesada com motéis decadentes, corridas clandestinas e crime pesado. Posição 2: Vice Beach, o calçadão icônico lotado de turistas, carros esportivos e caos puro à beira-mar. Posição 1: O coração neon de Vice City à noite, com arranha-céus iluminados, baladas luxuosas e toda a nostalgia elevada ao nível máximo.",
+      "queries": [
+        "GTA 6 Leonida map Vice City aerial skyline trailer",
+        "GTA 6 airboat swamp Grassrivers Leonida trailer",
+        "GTA 6 Leonida Keys bridge ocean boats trailer",
+        "GTA 6 Port Gellhorn police motel street trailer",
+        "GTA 6 Vice Beach ocean crowded beach trailer",
+        "GTA 6 Vice City night neon skyline palm trees"
+      ]
+    },
+    {
+      "slug": "top5_teorias_mais_malucas_lucia_jason_gta6",
+      "tema": "5 teorias mais malucas sobre Lucia e Jason em GTA VI que dividem a internet",
+      "foco": "Posição 5: A teoria de que Jason é um policial infiltrado que acaba se apaixonando pela Lucia durante os assaltos em Vice City. Posição 4: A teoria do final trágico estilo Bonnie e Clyde onde o jogador terá que escolher quem sobrevive na missão final. Posição 3: A teoria de que Lucia começa o jogo presa e o prólogo acontece dentro da penitenciária de Leonida. Posição 2: A conexão secreta com personagens clássicos do universo HD de GTA IV e GTA V aparecendo em missões secundárias. Posição 1: A teoria de que o mapa vai evoluir e receber novas cidades por atualizações ao longo dos próximos dez anos.",
+      "queries": [
+        "GTA 6 Lucia Jason official key art Rockstar",
+        "GTA 6 Lucia prison orange uniform trailer screenshot",
+        "GTA 6 Lucia Jason car getaway neon night trailer",
+        "GTA 6 Lucia Jason motel trust scene trailer",
+        "GTA 6 Vice City police helicopters chase night",
+        "GTA 6 official logo Vice City palm trees sunset"
+      ]
+    }
+  ]
+}

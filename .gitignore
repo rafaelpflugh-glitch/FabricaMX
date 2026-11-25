@@ -9,6 +9,8 @@ temp/*
 !temp/.gitkeep
 output/*
 !output/.gitkeep
+nichos/*/output/*
+!nichos/*/output/.gitkeep
 
 # Sistema operacional / IDEs
 .DS_Store

@@ -1,4 +1,4 @@
-"""Motor de renderização de vídeo vertical 1080x1920@30fps via FFmpeg."""
+"""Motor de renderização multi-nicho 1080x1920@30fps via FFmpeg com B-Roll automático e cortes rápidos."""
 
 from __future__ import annotations
 
@@ -27,9 +27,8 @@ XFADE_TRANSITIONS = [
     "wipeleft",
     "smoothright",
     "wiperight",
-    "fadeblack",
-    "smoothleft",
     "slideleft",
+    "smoothleft",
     "slideright",
 ]
 
@@ -40,10 +39,7 @@ def _log(log_cb: LogCallback | None, msg: str) -> None:
 
 
 def escape_ffmpeg_filter_path(path: Path) -> str:
-    """
-    Escapa corretamente caminhos do Windows para uso em filtros libavfilter (ex.: ass=...).
-    Converte '\\' em '/' e escapa ':', '\\'', '[', ']', ';', ','.
-    """
+    """Escapa caminhos Windows para uso seguro em filtros libavfilter (ex.: ass=filename='...')."""
     resolved = str(path.resolve()).replace("\\", "/")
     resolved = resolved.replace(":", r"\:")
     resolved = resolved.replace("'", r"\'")
@@ -55,7 +51,7 @@ def escape_ffmpeg_filter_path(path: Path) -> str:
 
 
 def probe_media_duration(media_path: Path) -> float:
-    """Retorna a duração em segundos de um arquivo de vídeo/áudio via ffprobe."""
+    """Retorna a duração em segundos de um vídeo/áudio via ffprobe."""
     cmd = [
         "ffprobe",
         "-v",
@@ -82,20 +78,15 @@ def probe_media_duration(media_path: Path) -> float:
 
 
 def _load_windows_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Carrega fonte bold confiável do Windows com fallback seguro."""
     font_candidates = (
         [
-            r"C:\Windows\Fonts\arialbd.ttf",
             r"C:\Windows\Fonts\impact.ttf",
+            r"C:\Windows\Fonts\arialbd.ttf",
             r"C:\Windows\Fonts\segoeuib.ttf",
-            r"C:\Windows\Fonts\calibrib.ttf",
             r"C:\Windows\Fonts\arial.ttf",
         ]
         if bold
-        else [
-            r"C:\Windows\Fonts\segoeui.ttf",
-            r"C:\Windows\Fonts\arial.ttf",
-        ]
+        else [r"C:\Windows\Fonts\segoeui.ttf", r"C:\Windows\Fonts\arial.ttf"]
     )
     for fp in font_candidates:
         if Path(fp).exists():
@@ -112,7 +103,6 @@ def _wrap_text_pixels(
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     max_width: int,
 ) -> list[str]:
-    """Quebra texto em linhas respeitando largura máxima em pixels."""
     words = text.split()
     if not words:
         return []
@@ -133,53 +123,34 @@ def _wrap_text_pixels(
 def create_hook_banner_png(
     hook_text: str,
     output_path: Path,
-    club_label: str = "LIGA MX",
+    club_label: str = "FÁBRICA TK",
     width: int = 1080,
     height: int = 1920,
 ) -> Path:
-    """
-    Cria um banner PNG transparente de alto impacto para os 3 primeiros segundos (gancho_tela).
-    Usar PNG com Pillow garante acentuação perfeita em espanhol e zero erro de fonte no Windows.
-    """
+    """Cria um banner PNG transparente opcional de alto impacto para os primeiros segundos."""
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
     title_font = _load_windows_font(size=60, bold=True)
     badge_font = _load_windows_font(size=30, bold=True)
 
-    clean_hook = (hook_text or "¡ÚLTIMA HORA EN LA LIGA MX!").strip().upper()
+    clean_hook = (hook_text or "NOVIDADE!").strip().upper()
     card_margin_x = 68
     card_w = width - (card_margin_x * 2)
     text_max_w = card_w - 84
 
-    lines = _wrap_text_pixels(draw, clean_hook, title_font, text_max_w)
-    if not lines:
-        lines = ["¡ÚLTIMA HORA!"]
-
-    line_heights: list[int] = []
-    for line in lines:
-        bb = draw.textbbox((0, 0), line, font=title_font)
-        line_heights.append(bb[3] - bb[1])
+    lines = _wrap_text_pixels(draw, clean_hook, title_font, text_max_w) or ["NOVIDADE!"]
+    line_heights = [draw.textbbox((0, 0), line, font=title_font)[3] - draw.textbbox((0, 0), line, font=title_font)[1] for line in lines]
 
     line_spacing = 16
     total_text_h = sum(line_heights) + line_spacing * (len(lines) - 1)
-    pad_top = 48
-    pad_bottom = 42
+    pad_top, pad_bottom = 48, 42
     card_h = total_text_h + pad_top + pad_bottom
 
-    card_x0 = card_margin_x
-    card_y0 = 235
-    card_x1 = card_x0 + card_w
-    card_y1 = card_y0 + card_h
+    card_x0, card_y0 = card_margin_x, 235
+    card_x1, card_y1 = card_x0 + card_w, card_y0 + card_h
 
-    # Sombra suave do cartão
-    draw.rounded_rectangle(
-        (card_x0 + 8, card_y0 + 12, card_x1 + 8, card_y1 + 12),
-        radius=28,
-        fill=(0, 0, 0, 150),
-    )
-
-    # Cartão principal escuro translúcido com borda amarela vibrante
+    draw.rounded_rectangle((card_x0 + 8, card_y0 + 12, card_x1 + 8, card_y1 + 12), radius=28, fill=(0, 0, 0, 150))
     draw.rounded_rectangle(
         (card_x0, card_y0, card_x1, card_y1),
         radius=28,
@@ -188,39 +159,32 @@ def create_hook_banner_png(
         width=6,
     )
 
-    # Faixa superior "ÚLTIMA HORA • CLUBE"
-    badge_text = f"ÚLTIMA HORA  •  {club_label.upper()}"
+    badge_text = f"DESTAQUE  •  {club_label.upper()}"
     b_box = draw.textbbox((0, 0), badge_text, font=badge_font)
     badge_w = (b_box[2] - b_box[0]) + 54
     badge_h = (b_box[3] - b_box[1]) + 22
     badge_x0 = (width - badge_w) // 2
     badge_y0 = card_y0 - (badge_h // 2) - 4
-    badge_x1 = badge_x0 + badge_w
-    badge_y1 = badge_y0 + badge_h
 
     draw.rounded_rectangle(
-        (badge_x0, badge_y0, badge_x1, badge_y1),
+        (badge_x0, badge_y0, badge_x0 + badge_w, badge_y0 + badge_h),
         radius=16,
         fill=(220, 38, 38, 255),
         outline=(255, 255, 255, 220),
         width=3,
     )
     draw.text(
-        ((badge_x0 + badge_x1) // 2, (badge_y0 + badge_y1) // 2),
+        (width // 2, badge_y0 + badge_h // 2),
         badge_text,
         font=badge_font,
         fill=(255, 255, 255, 255),
         anchor="mm",
     )
 
-    # Texto principal do gancho centralizado
     cur_y = card_y0 + pad_top
     for line, lh in zip(lines, line_heights):
-        cx = width // 2
-        cy = cur_y + lh // 2
-        # Contorno escuro para máxima legibilidade
         draw.text(
-            (cx, cy),
+            (width // 2, cur_y + lh // 2),
             line,
             font=title_font,
             fill=(250, 204, 21, 255),
@@ -234,37 +198,88 @@ def create_hook_banner_png(
     return output_path
 
 
-def _pick_random_asset(folder: Path, extensions: tuple[str, ...]) -> Path | None:
-    if not folder.exists():
-        return None
-    candidates = [
-        p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in extensions
-    ]
-    if not candidates:
-        return None
-    return random.choice(candidates)
+def _pick_random_asset(folders: list[Path], extensions: tuple[str, ...]) -> Path | None:
+    for folder in folders:
+        if not folder.exists():
+            continue
+        candidates = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in extensions]
+        if candidates:
+            return random.choice(candidates)
+    return None
 
 
-def _generate_cinematic_sports_bed(work_dir: Path) -> Path:
+def _collect_broll_slices(
+    broll_dir: Path,
+    clip_dur: float,
+    max_slices: int,
+) -> list[tuple[Path, float]]:
     """
-    Gera uma trilha instrumental épica/esportiva livre de direitos autorais (Dm - Bb - F - C a 112 BPM)
-    como fallback caso a pasta assets/music/ ainda esteja vazia, evitando vídeos mudos e sem alma.
+    Coleta fatias não repetidas (arquivo, timestamp_inicio) a partir de clipes .mp4 em assets/broll/.
+    Permite fatiar automaticamente um trailer (ex.: GTA VI) ou vídeo de lances da Liga MX!
     """
-    wav_path = work_dir / "auto_sports_bed.wav"
+    if not broll_dir.exists() or max_slices <= 0:
+        return []
+
+    video_exts = (".mp4", ".mov", ".mkv", ".webm")
+    files = sorted([p for p in broll_dir.iterdir() if p.is_file() and p.suffix.lower() in video_exts])
+    if not files:
+        return []
+
+    pool: list[tuple[Path, float]] = []
+    for vf in files:
+        dur = probe_media_duration(vf)
+        if dur < clip_dur + 0.5:
+            continue
+        # Pula os 2 primeiros e 2 últimos segundos em vídeos longos para evitar telas pretas/logos
+        start_margin = 2.0 if dur > 15.0 else 0.2
+        end_limit = dur - clip_dur - (2.0 if dur > 15.0 else 0.2)
+        if end_limit <= start_margin:
+            pool.append((vf, 0.0))
+            continue
+
+        usable = end_limit - start_margin
+        step = max(clip_dur + 1.2, usable / max(1, min(14, max_slices)))
+        t = start_margin
+        while t <= end_limit:
+            pool.append((vf, round(t, 2)))
+            t += step
+
+    if not pool:
+        return []
+
+    random.shuffle(pool)
+    return pool[:max_slices]
+
+
+def _generate_cinematic_bed(work_dir: Path, niche_id: str = "gta_vi") -> Path:
+    """
+    Gera trilha instrumental pulsante livre de direitos autorais (116 BPM) como fallback
+    quando a pasta assets/music/ do nicho ainda está vazia.
+    """
+    wav_path = work_dir / "auto_tension_bed.wav"
     sr = 22050
-    bpm = 112.0
+    bpm = 118.0 if niche_id == "gta_vi" else 112.0
     beat_dur = 60.0 / bpm
-    # 16 batidas (~8.57s) em loop perfeito (4 compassos: Dm, Bb, F, C)
     total_beats = 16
     duration = total_beats * beat_dur
     num_samples = int(sr * duration)
 
-    chords = [
-        (73.42, 146.83, 174.61, 220.00),  # Dm (D2, D3, F3, A3)
-        (58.27, 116.54, 146.83, 174.61),  # Bb (Bb1, Bb2, D3, F3)
-        (87.31, 174.61, 220.00, 261.63),  # F  (F2, F3, A3, C4)
-        (65.41, 130.81, 164.81, 196.00),  # C  (C2, C3, E3, G3)
-    ]
+    if niche_id == "gta_vi":
+        # Progressão Synthwave Vice City (Am - F - C - G)
+        chords = [
+            (55.00, 220.00, 261.63, 329.63),
+            (43.65, 174.61, 220.00, 261.63),
+            (65.41, 130.81, 164.81, 196.00),
+            (49.00, 196.00, 246.94, 293.66),
+        ]
+    else:
+        # Progressão Épica Esportiva (Dm - Bb - F - C)
+        chords = [
+            (73.42, 146.83, 174.61, 220.00),
+            (58.27, 116.54, 146.83, 174.61),
+            (87.31, 174.61, 220.00, 261.63),
+            (65.41, 130.81, 164.81, 196.00),
+        ]
 
     two_pi = 2.0 * math.pi
     buf = bytearray(num_samples * 2)
@@ -279,35 +294,29 @@ def _generate_cinematic_sports_bed(work_dir: Path) -> Path:
 
         bass_f, n1, n2, n3 = chords[bar_idx]
 
-        # Pad cinematográfico suave com leve respiração sidechain no tempo do bumbo
-        sidechain = 0.45 + 0.55 * min(1.0, beat_frac * 3.2)
+        sidechain = 0.40 + 0.60 * min(1.0, beat_frac * 3.5)
         pad = (
-            0.22 * math.sin(two_pi * n1 * t)
-            + 0.16 * math.sin(two_pi * n2 * t)
+            0.20 * math.sin(two_pi * n1 * t)
+            + 0.15 * math.sin(two_pi * n2 * t)
             + 0.14 * math.sin(two_pi * n3 * t)
             + 0.08 * math.sin(two_pi * (n3 * 2.0) * t)
         ) * sidechain
 
-        # Sub-bass pulsante em colcheias (estilo batida esportiva moderna)
-        bass_env = math.exp(-half_frac * 4.5)
-        bass = 0.34 * math.sin(two_pi * bass_f * t) * (0.45 + 0.55 * bass_env)
+        bass_env = math.exp(-half_frac * 4.8)
+        bass = 0.36 * math.sin(two_pi * bass_f * t) * (0.42 + 0.58 * bass_env)
 
-        # Bumbo profundo nos tempos 1 e 3 (e contratempo 3.5)
         kick = 0.0
         for hit in (0.0, 2.0, 3.5):
             dt = beat_in_bar - hit
-            if 0.0 <= dt < 0.25:
+            if 0.0 <= dt < 0.24:
                 k_t = dt * beat_dur
-                k_freq = 48.0 + 95.0 * math.exp(-k_t * 32.0)
-                kick += 0.42 * math.sin(two_pi * k_freq * k_t) * math.exp(-k_t * 16.0)
+                k_freq = 46.0 + 98.0 * math.exp(-k_t * 34.0)
+                kick += 0.44 * math.sin(two_pi * k_freq * k_t) * math.exp(-k_t * 17.0)
 
-        # Pulso sutil de arpejo/tensão em semicolcheias
         arp_step = int(beat_pos * 2) % 3
         arp_freq = (n1, n2, n3)[arp_step] * 2.0
-        arp_env = math.exp(-half_frac * 7.0)
-        arp = 0.09 * math.sin(two_pi * arp_freq * t) * arp_env
+        arp = 0.10 * math.sin(two_pi * arp_freq * t) * math.exp(-half_frac * 7.5)
 
-        # Envelope suave nas extremidades para loop sem estalo
         edge = 1.0
         if n < 300:
             edge = n / 300.0
@@ -330,8 +339,7 @@ def _parse_ffmpeg_time(line: str) -> float | None:
     match = re.search(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)", line)
     if not match:
         return None
-    h, m, s = int(match.group(1)), int(match.group(2)), float(match.group(3))
-    return h * 3600 + m * 60 + s
+    return int(match.group(1)) * 3600 + int(match.group(2)) * 60 + float(match.group(3))
 
 
 def save_post_metadata_txt(
@@ -344,7 +352,6 @@ def save_post_metadata_txt(
     hashtags: list[str],
     roteiro: str,
 ) -> Path:
-    """Salva o arquivo .txt pronto para copiar e colar na postagem do TikTok."""
     hashtags_line = " ".join(hashtags)
     content = (
         f"=== LEGENDA PRONTA PARA TIKTOK ===\n"
@@ -352,7 +359,7 @@ def save_post_metadata_txt(
         f"{hashtags_line}\n\n"
         f"=== METADADOS ===\n"
         f"Gancho em tela: {gancho_tela}\n"
-        f"Notícia original: {title}\n"
+        f"Pauta original: {title}\n"
         f"Fonte: {source}\n"
         f"Link: {url}\n\n"
         f"=== ROTEIRO NARRADO ===\n"
@@ -382,15 +389,11 @@ def render_video(
     stop_event: threading.Event | None = None,
 ) -> tuple[Path, Path]:
     """
-    Renderiza o vídeo final 1080x1920@30fps via FFmpeg com:
-    - Intro opcional do Google Flow (primeiros 5s de assets/intros/)
-    - Cortes dinâmicos (4–5s por imagem) com zoompan alternado (zoom-in / zoom-out)
-    - Transições rápidas xfade (fade/wipe/blur/dissolve/slide)
-    - Vinheta e escurecimento leve para leitura
-    - Marca d'água opcional (assets/branding/*.png)
-    - Banner de gancho_tela nos primeiros 3 segundos
-    - Legendas .ass queimadas
-    - Música de fundo aleatória de assets/music/ a ~10% volume (opcional)
+    Renderiza vídeo vertical 1080x1920@30fps de alta retenção:
+    - Cortes rápidos (2.4–3.2s por cena)
+    - Intercala automaticamente trechos em movimento de assets/broll/*.mp4 (se houver!) com fotos de ação
+    - Movimento cinético (punch zoom-in/out + pan lateral) e transições rápidas xfade (0.18s)
+    - Legendas .ass centralizadas estilo viral + trilha de fundo + marca d'água por nicho
     """
     if not image_paths:
         raise ValueError("Lista de imagens vazia para renderização.")
@@ -399,76 +402,108 @@ def render_video(
     width = int(video_cfg.get("largura", 1080))
     height = int(video_cfg.get("altura", 1920))
     fps = int(video_cfg.get("fps", 30))
-    trans_dur = float(video_cfg.get("duracao_transicao", 0.25))
+    trans_dur = float(video_cfg.get("duracao_transicao", 0.18))
     usar_banner_topo = bool(video_cfg.get("usar_banner_topo", False))
-    banner_dur = float(video_cfg.get("duracao_banner_segundos", 2.8))
-    intro_max_dur = float(video_cfg.get("duracao_intro_segundos", 5.0))
+    banner_dur = float(video_cfg.get("duracao_banner_segundos", 2.5))
+    intro_max_dur = float(video_cfg.get("duracao_intro_segundos", 4.5))
     music_vol = float(video_cfg.get("volume_musica", 0.18))
     usar_musica = bool(video_cfg.get("usar_musica", True))
     usar_intro = bool(video_cfg.get("usar_intro", True))
-    club_focus = str(config.get("clube_foco", "LIGA MX"))
+    usar_broll = bool(video_cfg.get("usar_broll", True))
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    niche_id = str(config.get("nicho_ativo", "futebol_mexicano"))
+    niche_name = str(config.get("nicho_nome", "Fábrica TK"))
+    paths_dict = config.get("paths") or {}
+
+    output_dir = Path(paths_dict["output_dir"]) if paths_dict.get("output_dir") else OUTPUT_DIR
+    music_dirs = [Path(paths_dict["music_dir"]), MUSIC_DIR] if paths_dict.get("music_dir") else [MUSIC_DIR]
+    intro_dirs = [Path(paths_dict["intros_dir"]), INTROS_DIR] if paths_dict.get("intros_dir") else [INTROS_DIR]
+    brand_dirs = [Path(paths_dict["branding_dir"]), BRANDING_DIR] if paths_dict.get("branding_dir") else [BRANDING_DIR]
+    broll_dir = Path(paths_dict["broll_dir"]) if paths_dict.get("broll_dir") else (work_dir / "_no_broll")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
     work_dir.mkdir(parents=True, exist_ok=True)
 
     total_target_dur = max(5.0, float(audio_duration) + 0.35)
 
-    # Verifica assets opcionais
+    # 1) Intro opcional
     intro_path: Path | None = None
     intro_dur = 0.0
     if usar_intro:
-        cand_intro = _pick_random_asset(INTROS_DIR, (".mp4", ".mov", ".mkv", ".webm"))
+        cand_intro = _pick_random_asset(intro_dirs, (".mp4", ".mov", ".mkv", ".webm"))
         if cand_intro:
             probed = probe_media_duration(cand_intro)
             if probed >= 1.5:
                 intro_path = cand_intro
-                intro_dur = min(intro_max_dur, probed, max(2.0, total_target_dur * 0.25))
+                intro_dur = min(intro_max_dur, probed, max(2.0, total_target_dur * 0.22))
                 _log(log_cb, f"[VideoEngine] Intro selecionada: {intro_path.name} ({intro_dur:.1f}s)")
 
+    # 2) Música de fundo (do nicho -> raiz -> batida sintetizada do nicho)
     music_path: Path | None = None
     if usar_musica:
-        music_path = _pick_random_asset(MUSIC_DIR, (".mp3", ".wav", ".m4a", ".ogg"))
+        music_path = _pick_random_asset(music_dirs, (".mp3", ".wav", ".m4a", ".ogg"))
         if music_path:
             _log(log_cb, f"[VideoEngine] Trilha de fundo: {music_path.name} (vol {int(music_vol * 100)}%)")
         else:
-            music_path = _generate_cinematic_sports_bed(work_dir)
+            music_path = _generate_cinematic_bed(work_dir, niche_id=niche_id)
             _log(
                 log_cb,
-                f"[VideoEngine] Pasta assets/music/ vazia — usando batida esportiva embutida (vol {int(music_vol * 100)}%).",
+                f"[VideoEngine] Usando trilha pulsante embutida do nicho '{niche_id}' (vol {int(music_vol * 100)}%).",
             )
 
-    branding_path = _pick_random_asset(BRANDING_DIR, (".png",))
+    # 3) Marca d'água opcional
+    branding_path = _pick_random_asset(brand_dirs, (".png",))
     if branding_path:
         _log(log_cb, f"[VideoEngine] Marca d'água detectada: {branding_path.name}")
 
-    # Gera PNG do banner gancho_tela apenas se ativado
+    # 4) Banner opcional
     banner_png: Path | None = None
     if usar_banner_topo:
         banner_png = work_dir / "hook_banner.png"
         create_hook_banner_png(
             hook_text=gancho_tela,
             output_path=banner_png,
-            club_label=club_focus,
+            club_label=niche_name,
             width=width,
             height=height,
         )
 
-    # Calcula duração de cada imagem para sincronizar exatamente com a duração do áudio
-    num_images = len(image_paths)
-    num_segments = num_images + (1 if intro_path else 0)
-    trans_dur = min(trans_dur, 0.5)
+    # 5) Calcula ritmo rápido de cenas (~2.5–3.2s por cena) e intercala B-Roll em vídeo se existir
+    trans_dur = min(trans_dur, 0.35)
+    num_slots = len(image_paths)
+    num_segments = num_slots + (1 if intro_path else 0)
+    raw_seg_dur = (total_target_dur - intro_dur + (num_segments - 1) * trans_dur) / num_slots
+    seg_frames = max(int(round(max(1.8, raw_seg_dur) * fps)), int(round((trans_dur + 0.8) * fps)))
+    seg_dur = seg_frames / float(fps)
 
-    raw_img_dur = (total_target_dur - intro_dur + (num_segments - 1) * trans_dur) / num_images
-    img_frames = max(int(round(max(2.0, raw_img_dur) * fps)), int(round((trans_dur + 1.0) * fps)))
-    img_dur = img_frames / float(fps)
+    # Coleta fatias de B-Roll (.mp4) se houver arquivos na pasta assets/broll/ do nicho
+    broll_slices: list[tuple[Path, float]] = []
+    if usar_broll:
+        broll_slices = _collect_broll_slices(broll_dir, clip_dur=seg_dur + 0.15, max_slices=num_slots // 2 + 2)
+        if broll_slices:
+            _log(
+                log_cb,
+                f"[VideoEngine] B-Roll detectado! Intercalando {len(broll_slices)} cenas em vídeo real com fotos de ação.",
+            )
+
+    # Monta timeline de cenas: intercala B-Roll nas posições ímpares (ou pares) mantendo fotos da pauta
+    scenes: list[dict[str, Any]] = []
+    broll_cursor = 0
+    for idx, img_p in enumerate(image_paths):
+        if broll_slices and (idx % 2 == 1) and broll_cursor < len(broll_slices):
+            v_file, v_start = broll_slices[broll_cursor]
+            broll_cursor += 1
+            scenes.append({"type": "video", "path": v_file, "start": v_start})
+        else:
+            scenes.append({"type": "image", "path": img_p})
 
     _log(
         log_cb,
-        f"[VideoEngine] Compondo {num_segments} cenas "
-        f"({img_dur:.2f}s por foto, transição {trans_dur:.2f}s, duração alvo {total_target_dur:.1f}s)...",
+        f"[VideoEngine] Compondo {num_segments} cenas rápidas "
+        f"({seg_dur:.2f}s cada, transição {trans_dur:.2f}s, duração alvo {total_target_dur:.1f}s)...",
     )
 
-    # Monta entradas do FFmpeg e índices
+    # Entradas FFmpeg
     inputs: list[str] = []
     idx_counter = 0
 
@@ -478,13 +513,15 @@ def render_video(
         intro_idx = idx_counter
         idx_counter += 1
 
-    img_indices: list[int] = []
-    for img_p in image_paths:
-        inputs.extend(["-i", str(img_p)])
-        img_indices.append(idx_counter)
+    scene_entries: list[tuple[int, dict[str, Any]]] = []
+    for sc in scenes:
+        if sc["type"] == "video":
+            inputs.extend(["-ss", f"{sc['start']:.2f}", "-t", f"{seg_dur + 0.25:.2f}", "-i", str(sc["path"])])
+        else:
+            inputs.extend(["-i", str(sc["path"])])
+        scene_entries.append((idx_counter, sc))
         idx_counter += 1
 
-    # Banner PNG opcional em loop curto
     banner_idx: int | None = None
     if banner_png is not None:
         inputs.extend(["-loop", "1", "-t", f"{banner_dur + 0.5:.2f}", "-i", str(banner_png)])
@@ -497,23 +534,20 @@ def render_video(
         branding_idx = idx_counter
         idx_counter += 1
 
-    # Narração TTS
     inputs.extend(["-i", str(audio_path)])
     voice_idx = idx_counter
     idx_counter += 1
 
-    # Trilha musical opcional em loop
     music_idx: int | None = None
     if music_path:
         inputs.extend(["-stream_loop", "-1", "-i", str(music_path)])
         music_idx = idx_counter
         idx_counter += 1
 
-    # Constrói filter_complex em arquivo separado (evita limite de linha de comando no Windows)
+    # Filtergraph
     filter_lines: list[str] = []
     segment_labels: list[tuple[str, float]] = []
 
-    # 1) Intro opcional normalizada
     if intro_idx is not None:
         filter_lines.append(
             f"[{intro_idx}:v]"
@@ -524,45 +558,49 @@ def render_video(
         )
         segment_labels.append(("seg_intro", intro_dur))
 
-    # 2) Cenas de imagem com movimento cinético variado (Zoom-IN, Pan-Dir+Zoom, Zoom-OUT, Pan-Esq+Zoom)
-    up_w = int(round(width * 1.25))
-    up_h = int(round(height * 1.25))
-    denom = max(1, img_frames - 1)
+    up_w = int(round(width * 1.28))
+    up_h = int(round(height * 1.28))
+    denom = max(1, seg_frames - 1)
 
-    for i, in_idx in enumerate(img_indices):
-        motion = i % 4
-        if motion == 0:
-            # Zoom IN dinâmico: 1.00 -> 1.15
-            z_expr = f"1.0+0.15*(on/{denom})"
-            x_expr = "iw/2-(iw/zoom/2)"
-            y_expr = "ih/2-(ih/zoom/2)"
-        elif motion == 1:
-            # Pan suave para a direita com zoom leve: 1.12 -> 1.16
-            z_expr = f"1.12+0.04*(on/{denom})"
-            x_expr = f"(iw-iw/zoom)*(0.25+0.50*(on/{denom}))"
-            y_expr = "ih/2-(ih/zoom/2)"
-        elif motion == 2:
-            # Zoom OUT dinâmico: 1.15 -> 1.00
-            z_expr = f"1.15-0.15*(on/{denom})"
-            x_expr = "iw/2-(iw/zoom/2)"
-            y_expr = "ih/2-(ih/zoom/2)"
-        else:
-            # Pan suave para a esquerda com zoom leve: 1.12 -> 1.16
-            z_expr = f"1.12+0.04*(on/{denom})"
-            x_expr = f"(iw-iw/zoom)*(0.75-0.50*(on/{denom}))"
-            y_expr = "ih/2-(ih/zoom/2)"
-
+    for i, (in_idx, sc) in enumerate(scene_entries):
         label = f"seg_{i:02d}"
-        filter_lines.append(
-            f"[{in_idx}:v]"
-            f"scale={up_w}:{up_h}:flags=bicubic,"
-            f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
-            f"d={img_frames}:s={width}x{height}:fps={fps},"
-            f"setpts=PTS-STARTPTS,settb=AVTB,fps={fps},format=yuv420p,setsar=1[{label}]"
-        )
-        segment_labels.append((label, img_dur))
+        if sc["type"] == "video":
+            filter_lines.append(
+                f"[{in_idx}:v]"
+                f"trim=start=0:duration={seg_dur:.3f},setpts=PTS-STARTPTS,"
+                f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height},"
+                f"fps={fps},settb=AVTB,format=yuv420p,setsar=1[{label}]"
+            )
+        else:
+            motion = i % 4
+            if motion == 0:
+                z_expr = f"1.0+0.18*(on/{denom})"
+                x_expr = "iw/2-(iw/zoom/2)"
+                y_expr = "ih/2-(ih/zoom/2)"
+            elif motion == 1:
+                z_expr = f"1.14+0.05*(on/{denom})"
+                x_expr = f"(iw-iw/zoom)*(0.20+0.60*(on/{denom}))"
+                y_expr = "ih/2-(ih/zoom/2)"
+            elif motion == 2:
+                z_expr = f"1.18-0.18*(on/{denom})"
+                x_expr = "iw/2-(iw/zoom/2)"
+                y_expr = "ih/2-(ih/zoom/2)"
+            else:
+                z_expr = f"1.14+0.05*(on/{denom})"
+                x_expr = f"(iw-iw/zoom)*(0.80-0.60*(on/{denom}))"
+                y_expr = "ih/2-(ih/zoom/2)"
 
-    # 3) Encadeia transições xfade rápidas
+            filter_lines.append(
+                f"[{in_idx}:v]"
+                f"scale={up_w}:{up_h}:flags=bicubic,"
+                f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
+                f"d={seg_frames}:s={width}x{height}:fps={fps},"
+                f"setpts=PTS-STARTPTS,settb=AVTB,fps={fps},format=yuv420p,setsar=1[{label}]"
+            )
+        segment_labels.append((label, seg_dur))
+
+    # Transições rápidas xfade
     if len(segment_labels) == 1:
         current_v = segment_labels[0][0]
     else:
@@ -579,23 +617,17 @@ def render_video(
             current_v = out_label
             cum_dur = offset + next_dur
 
-    # 4) Vinheta e leve escurecimento para melhorar contraste das legendas
+    # Vinheta + contraste vibrante
     filter_lines.append(
-        f"[{current_v}]vignette=PI/4.8,eq=brightness=-0.04:contrast=1.06:saturation=1.08[v_graded]"
+        f"[{current_v}]vignette=PI/4.8,eq=brightness=-0.03:contrast=1.06:saturation=1.08[v_graded]"
     )
     current_v = "v_graded"
 
-    # 5) Marca d'água opcional (assets/branding/*.png)
     if branding_idx is not None:
-        filter_lines.append(
-            f"[{branding_idx}:v]scale=170:-1,format=rgba,colorchannelmixer=aa=0.78[wm]"
-        )
-        filter_lines.append(
-            f"[{current_v}][wm]overlay=W-w-36:96[v_wm]"
-        )
+        filter_lines.append(f"[{branding_idx}:v]scale=170:-1,format=rgba,colorchannelmixer=aa=0.78[wm]")
+        filter_lines.append(f"[{current_v}][wm]overlay=W-w-36:96[v_wm]")
         current_v = "v_wm"
 
-    # 6) Banner opcional do gancho_tela nos primeiros segundos
     if banner_idx is not None:
         fade_out_start = max(0.3, banner_dur - 0.30)
         filter_lines.append(
@@ -608,21 +640,18 @@ def render_video(
         )
         current_v = "v_banner"
 
-    # 7) Legendas .ass queimadas (com escape seguro para Windows)
     escaped_ass = escape_ffmpeg_filter_path(ass_path)
-    filter_lines.append(
-        f"[{current_v}]ass=filename='{escaped_ass}',format=yuv420p[vout]"
-    )
+    filter_lines.append(f"[{current_v}]ass=filename='{escaped_ass}',format=yuv420p[vout]")
 
-    # 8) Mixagem de áudio (narração + música de fundo opcional em ~10%)
+    # Mixagem de áudio
     if music_idx is not None:
-        fade_out_audio = max(0.5, total_target_dur - 2.2)
-        filter_lines.append(f"[{voice_idx}:a]volume=1.06,apad=pad_dur=0.35[voice]")
+        fade_out_audio = max(0.5, total_target_dur - 2.0)
+        filter_lines.append(f"[{voice_idx}:a]volume=1.08,apad=pad_dur=0.35[voice]")
         filter_lines.append(
             f"[{music_idx}:a]atrim=0:{total_target_dur:.3f},asetpts=PTS-STARTPTS,"
             f"volume={music_vol:.3f},"
-            f"afade=t=in:st=0:d=1.0,"
-            f"afade=t=out:st={fade_out_audio:.3f}:d=2.2[bgm]"
+            f"afade=t=in:st=0:d=0.8,"
+            f"afade=t=out:st={fade_out_audio:.3f}:d=2.0[bgm]"
         )
         filter_lines.append(
             "[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,"
@@ -630,7 +659,7 @@ def render_video(
         )
     else:
         filter_lines.append(
-            f"[{voice_idx}:a]volume=1.06,apad=pad_dur=0.35,alimiter=limit=0.95[aout]"
+            f"[{voice_idx}:a]volume=1.08,apad=pad_dur=0.35,alimiter=limit=0.95[aout]"
         )
 
     filter_script_path = work_dir / "filter_complex.txt"
@@ -639,8 +668,8 @@ def render_video(
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_slug = slugify(article_title, max_length=42)
-    output_mp4 = OUTPUT_DIR / f"{timestamp}_{base_slug}.mp4"
-    output_txt = OUTPUT_DIR / f"{timestamp}_{base_slug}.txt"
+    output_mp4 = output_dir / f"{timestamp}_{base_slug}.mp4"
+    output_txt = output_dir / f"{timestamp}_{base_slug}.txt"
 
     cmd = [
         "ffmpeg",
@@ -676,7 +705,7 @@ def render_video(
         str(output_mp4),
     ]
 
-    _log(log_cb, f"[VideoEngine] Iniciando renderização FFmpeg -> {output_mp4.name}")
+    _log(log_cb, f"[VideoEngine] Renderizando FFmpeg -> nichos/{niche_id}/output/{output_mp4.name}")
 
     stderr_tail: list[str] = []
     proc = subprocess.Popen(
@@ -708,8 +737,7 @@ def render_video(
 
             cur_time = _parse_ffmpeg_time(stripped)
             if cur_time is not None and progress_cb:
-                pct = max(0.0, min(1.0, cur_time / total_target_dur))
-                progress_cb(pct)
+                progress_cb(max(0.0, min(1.0, cur_time / total_target_dur)))
 
         ret = proc.wait()
     except Exception:
@@ -743,6 +771,6 @@ def render_video(
     size_mb = output_mp4.stat().st_size / (1024 * 1024)
     _log(
         log_cb,
-        f"[VideoEngine] Vídeo concluído com sucesso! {output_mp4.name} ({size_mb:.1f} MB) + {output_txt.name}",
+        f"[VideoEngine] Vídeo concluído! {output_mp4.name} ({size_mb:.1f} MB) + {output_txt.name}",
     )
     return output_mp4, output_txt

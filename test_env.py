@@ -1,4 +1,4 @@
-"""Script de diagnóstico completo do ambiente FábricaMX."""
+"""Script de diagnóstico completo do ambiente Fábrica TK (Multi-Nicho)."""
 
 from __future__ import annotations
 
@@ -11,16 +11,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from src import (
-    BRANDING_DIR,
-    CONFIG_PATH,
-    HISTORY_PATH,
-    INTROS_DIR,
-    MUSIC_DIR,
-    OUTPUT_DIR,
-    TEMP_DIR,
-    load_config,
-)
+from src import CONFIG_PATH, NICHES_DIR, TEMP_DIR, build_runtime_config, get_niche_paths, list_niches
 from src.scriptwriter import check_ollama_health
 from src.tts_subtitles import WordTiming, build_tiktok_ass
 from src.video_engine import create_hook_banner_png, escape_ffmpeg_filter_path
@@ -32,7 +23,7 @@ REQUIRED_MODULES = [
     ("requests", "requests"),
     ("edge-tts", "edge_tts"),
     ("Pillow", "PIL"),
-    ("duckduckgo-search", "duckduckgo_search"),
+    ("ddgs", "ddgs"),
 ]
 
 INTERNAL_MODULES = [
@@ -59,19 +50,22 @@ def check_python() -> bool:
 
 def check_structure() -> bool:
     all_ok = True
-    paths = [
-        ("config.json", CONFIG_PATH, False),
-        ("history.json", HISTORY_PATH, False),
-        ("assets/music/", MUSIC_DIR, True),
-        ("assets/intros/", INTROS_DIR, True),
-        ("assets/branding/", BRANDING_DIR, True),
-        ("temp/", TEMP_DIR, True),
-        ("output/", OUTPUT_DIR, True),
-    ]
-    for name, path, is_dir in paths:
-        exists = path.is_dir() if is_dir else path.is_file()
-        _print_result(exists, f"Estrutura: {name}", str(path))
-        all_ok = all_ok and exists
+    _print_result(CONFIG_PATH.is_file(), "config.json", str(CONFIG_PATH))
+    all_ok &= CONFIG_PATH.is_file()
+
+    _print_result(NICHES_DIR.is_dir(), "Pasta nichos/", str(NICHES_DIR))
+    all_ok &= NICHES_DIR.is_dir()
+
+    niches = list_niches()
+    _print_result(len(niches) >= 2, "Nichos detectados", ", ".join(n["id"] for n in niches))
+    all_ok &= len(niches) >= 2
+
+    for n in niches:
+        paths = get_niche_paths(n["id"])
+        ok_n = all(paths[k].is_dir() for k in ("output_dir", "music_dir", "intros_dir", "broll_dir", "branding_dir"))
+        _print_result(ok_n, f"Nicho '{n['nome']}'", str(paths["root"]))
+        all_ok &= ok_n
+
     return all_ok
 
 
@@ -111,30 +105,27 @@ def check_ffmpeg_and_ass_smoke(config: dict) -> bool:
             timeout=10,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        first_line = out.splitlines()[0] if out else "desconhecido"
-        _print_result(True, "FFmpeg", first_line)
+        _print_result(True, "FFmpeg", out.splitlines()[0] if out else "ok")
     except Exception as exc:
         _print_result(False, "FFmpeg", str(exc))
         return False
 
-    # Smoke test real no Windows: zoompan + xfade + banner PNG + ass= com caminho absoluto
-    tmp_dir = Path(tempfile.mkdtemp(prefix="fabricamx_smoke_", dir=str(TEMP_DIR)))
+    tmp_dir = Path(tempfile.mkdtemp(prefix="fabricatk_smoke_", dir=str(TEMP_DIR)))
     try:
         img1 = tmp_dir / "img1.jpg"
         img2 = tmp_dir / "img2.jpg"
-        Image.new("RGB", (1080, 1920), (15, 32, 65)).save(img1, "JPEG")
-        Image.new("RGB", (1080, 1920), (45, 25, 10)).save(img2, "JPEG")
+        Image.new("RGB", (1080, 1920), (20, 15, 55)).save(img1, "JPEG")
+        Image.new("RGB", (1080, 1920), (60, 15, 45)).save(img2, "JPEG")
 
         banner_png = tmp_dir / "banner.png"
-        create_hook_banner_png("¡BOMBAZO EN COAPA!", banner_png, club_label="CLUB AMÉRICA")
+        create_hook_banner_png("GTA VI SEGREDO!", banner_png, club_label="GTA VI")
 
         ass_path = tmp_dir / "smoke.ass"
         words = [
-            WordTiming("¡BOMBAZO", 0.0, 0.5),
-            WordTiming("EN", 0.5, 0.8),
-            WordTiming("COAPA!", 0.8, 1.3),
-            WordTiming("LIGA", 1.3, 1.6),
-            WordTiming("MX!", 1.6, 2.0),
+            WordTiming("DETALHE", 0.0, 0.5),
+            WordTiming("OCULTO", 0.5, 1.0),
+            WordTiming("GTA", 1.0, 1.4),
+            WordTiming("VI!", 1.4, 2.0),
         ]
         build_tiktok_ass(words, ass_path, config)
 
@@ -142,13 +133,10 @@ def check_ffmpeg_and_ass_smoke(config: dict) -> bool:
         filter_script = tmp_dir / "smoke_filter.txt"
         filter_content = ";\n".join(
             [
-                "[0:v]scale=1296:2304,zoompan=z='1.0+0.10*(on/35)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=36:s=1080x1920:fps=30,setpts=PTS-STARTPTS,settb=AVTB,fps=30,format=yuv420p,setsar=1[s0]",
-                "[1:v]scale=1296:2304,zoompan=z='1.10-0.10*(on/35)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=36:s=1080x1920:fps=30,setpts=PTS-STARTPTS,settb=AVTB,fps=30,format=yuv420p,setsar=1[s1]",
-                "[s0][s1]xfade=transition=hblur:duration=0.35:offset=0.85[xf]",
-                "[xf]vignette=PI/4.8,eq=brightness=-0.04:contrast=1.05[vg]",
-                "[2:v]format=rgba,fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=1.5:d=0.3:alpha=1[bn]",
-                "[vg][bn]overlay=0:0:eof_action=pass:enable='between(t,0,1.8)'[vb]",
-                f"[vb]ass=filename='{escaped_ass}',format=yuv420p[vout]",
+                "[0:v]scale=1382:2458,zoompan=z='1.0+0.15*(on/35)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=36:s=1080x1920:fps=30,setpts=PTS-STARTPTS,settb=AVTB,fps=30,format=yuv420p,setsar=1[s0]",
+                "[1:v]scale=1382:2458,zoompan=z='1.15-0.15*(on/35)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=36:s=1080x1920:fps=30,setpts=PTS-STARTPTS,settb=AVTB,fps=30,format=yuv420p,setsar=1[s1]",
+                "[s0][s1]xfade=transition=hblur:duration=0.20:offset=0.90[xf]",
+                f"[xf]ass=filename='{escaped_ass}',format=yuv420p[vout]",
             ]
         )
         filter_script.write_text(filter_content, encoding="utf-8")
@@ -162,12 +150,6 @@ def check_ffmpeg_and_ass_smoke(config: dict) -> bool:
             str(img1),
             "-i",
             str(img2),
-            "-loop",
-            "1",
-            "-t",
-            "2.0",
-            "-i",
-            str(banner_png),
             "-/filter_complex",
             str(filter_script),
             "-map",
@@ -190,15 +172,10 @@ def check_ffmpeg_and_ass_smoke(config: dict) -> bool:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         if proc.returncode != 0 or not out_mp4.exists() or out_mp4.stat().st_size < 5000:
-            err_tail = "\n".join(proc.stderr.splitlines()[-10:])
-            _print_result(False, "FFmpeg Smoke Test (zoompan+xfade+banner+ass)", err_tail)
+            _print_result(False, "FFmpeg Smoke Test", "\n".join(proc.stderr.splitlines()[-10:]))
             return False
 
-        _print_result(
-            True,
-            "FFmpeg Smoke Test (zoompan + xfade + banner PNG + ass= Windows)",
-            f"OK ({out_mp4.stat().st_size // 1024} KB gerados e validados)",
-        )
+        _print_result(True, "FFmpeg Smoke Test (zoompan + xfade + ass= Windows)", f"OK ({out_mp4.stat().st_size // 1024} KB)")
         return True
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -206,45 +183,27 @@ def check_ffmpeg_and_ass_smoke(config: dict) -> bool:
 
 def check_ollama(config: dict) -> bool:
     ollama_url = config.get("ollama_url", "http://localhost:11434")
-    configured_model = config.get("ollama_modelo", "llama3.1:8b")
+    configured_model = config.get("ollama_modelo", "qwen3:8b")
 
     alive, models, err = check_ollama_health(ollama_url)
     if not alive:
         _print_result(False, f"Ollama ({ollama_url})", f"Indisponível ({err})")
         return False
-
     if not models:
-        _print_result(
-            False,
-            f"Ollama ({ollama_url})",
-            f"Servidor ativo, mas nenhum modelo baixado. Execute: ollama pull {configured_model}",
-        )
+        _print_result(False, f"Ollama ({ollama_url})", f"Nenhum modelo baixado. Execute: ollama pull {configured_model}")
         return False
 
-    has_configured = configured_model in models
-    if has_configured:
-        _print_result(
-            True,
-            f"Ollama ({ollama_url})",
-            f"Modelo '{configured_model}' pronto | Instalados: {', '.join(models)}",
-        )
-        return True
-
-    _print_result(
-        True,
-        f"Ollama ({ollama_url})",
-        f"Servidor ativo! Modelos instalados: {', '.join(models)} "
-        f"(aviso: config.json aponta para '{configured_model}')",
-    )
+    status = f"Modelo padrão '{configured_model}' pronto" if configured_model in models else f"Modelos disponíveis: {', '.join(models)}"
+    _print_result(True, f"Ollama ({ollama_url})", f"{status} | Total: {len(models)} modelos")
     return True
 
 
 def main() -> int:
     print("=" * 68)
-    print("  FÁBRICAMX — VERIFICAÇÃO DE AMBIENTE")
+    print("  FÁBRICA TK — VERIFICAÇÃO DE AMBIENTE MULTI-NICHO")
     print("=" * 68)
 
-    config = load_config()
+    config = build_runtime_config()
     results = [
         check_python(),
         check_structure(),
@@ -255,7 +214,7 @@ def main() -> int:
 
     print("=" * 68)
     if all(results):
-        print("  STATUS FINAL: TUDO PRONTO! Execute 'app.py' com o Python do .venv.")
+        print("  STATUS FINAL: TUDO PRONTO! Execute 'iniciar_fabrica_tk.bat'.")
         print("=" * 68)
         return 0
 

@@ -1,4 +1,4 @@
-"""Orquestrador principal da pipeline FábricaMX com suporte a lotes e callbacks em tempo real."""
+"""Orquestrador multi-nicho da pipeline Fábrica TK com callbacks de progresso e histórico isolado."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from src import TEMP_DIR, append_history
+from src import HISTORY_PATH, TEMP_DIR, append_history
 from src.media_fetcher import fetch_and_prepare_images
 from src.scraper import NewsArticle, fetch_next_news
 from src.scriptwriter import ScriptPackage, generate_script, pick_next_top5_topic
@@ -35,12 +35,12 @@ class BatchItemResult:
 
 
 class FabricaPipeline:
-    """Orquestra as 5 etapas da produção de vídeos verticais da Liga MX."""
+    """Orquestra as 5 etapas da produção de vídeos verticais em qualquer nicho configurado."""
 
     STAGES = [
-        "1/5 Coletando notícia",
+        "1/5 Coletando pauta",
         "2/5 Roteiro Ollama",
-        "3/5 Imagens",
+        "3/5 Cenas/Imagens",
         "4/5 Voz/Legenda",
         "5/5 Render FFmpeg",
     ]
@@ -98,30 +98,31 @@ class FabricaPipeline:
         batch_total: int = 1,
         exclude_urls: set[str] | None = None,
     ) -> BatchItemResult:
-        """Executa a pipeline completa para 1 vídeo."""
+        """Executa a pipeline completa para 1 vídeo no nicho ativo."""
         prefix = f"[Vídeo {batch_index}/{batch_total}] " if batch_total > 1 else ""
         job_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         job_dir = TEMP_DIR / f"job_{job_id}"
         job_dir.mkdir(parents=True, exist_ok=True)
 
         limpar_temp = bool(self.config.get("video", {}).get("limpar_temp", True))
+        paths_dict = self.config.get("paths") or {}
+        history_path = Path(paths_dict["history_path"]) if paths_dict.get("history_path") else HISTORY_PATH
+        niche_name = str(self.config.get("nicho_nome", "Fábrica TK"))
+
         article: NewsArticle | None = None
         script: ScriptPackage | None = None
 
         try:
-            # Etapa 1/5: Coletando notícia ou selecionando tema Top 5 Viral
+            # Etapa 1/5: Pauta (Top 5 Viral ou Notícia Quente do nicho)
             self._check_cancelled()
             self._progress(1, f"{prefix}{self.STAGES[0]}", 0.05)
-            modo = str(self.config.get("modo_conteudo", "noticia")).strip().lower()
+            modo = str(self.config.get("modo_conteudo", "top5")).strip().lower()
             if modo == "top5":
-                self._log(f"{prefix}Iniciando etapa 1/5: Selecionando tema Top 5 Viral estilo @yaguilas1...")
-                article = pick_next_top5_topic(
-                    club_focus=self.config.get("clube_foco", "Club América"),
-                    exclude_urls=exclude_urls,
-                )
-                self._log(f"{prefix}[Top5] Tema escolhido: {article.title}")
+                self._log(f"{prefix}Etapa 1/5 [{niche_name}]: Selecionando tema Top 5 Viral...")
+                article = pick_next_top5_topic(config=self.config, exclude_urls=exclude_urls)
+                self._log(f"{prefix}[Top5] Tema: {article.title}")
             else:
-                self._log(f"{prefix}Iniciando etapa 1/5: Coletando notícia quente da Liga MX...")
+                self._log(f"{prefix}Etapa 1/5 [{niche_name}]: Coletando notícia quente...")
                 article = fetch_next_news(
                     config=self.config,
                     exclude_urls=exclude_urls,
@@ -134,20 +135,16 @@ class FabricaPipeline:
             # Etapa 2/5: Roteiro Ollama
             self._check_cancelled()
             self._progress(2, f"{prefix}{self.STAGES[1]}", 0.22)
-            self._log(f"{prefix}Iniciando etapa 2/5: Gerando roteiro no Ollama...")
-            script = generate_script(
-                article=article,
-                config=self.config,
-                log_cb=self._log,
-            )
+            self._log(f"{prefix}Etapa 2/5: Gerando roteiro de alta retenção no Ollama...")
+            script = generate_script(article=article, config=self.config, log_cb=self._log)
             if self.on_preview:
                 self.on_preview(article, script)
             self._progress(2, f"{prefix}{self.STAGES[1]}", 0.40)
 
-            # Etapa 3/5: Imagens
+            # Etapa 3/5: Cenas/Imagens
             self._check_cancelled()
             self._progress(3, f"{prefix}{self.STAGES[2]}", 0.44)
-            self._log(f"{prefix}Iniciando etapa 3/5: Buscando e normalizando imagens (1080x1920)...")
+            self._log(f"{prefix}Etapa 3/5: Buscando e normalizando cenas de ação (1080x1920)...")
             image_paths = fetch_and_prepare_images(
                 search_terms=script.termos_busca_imagens,
                 output_dir=job_dir,
@@ -161,7 +158,7 @@ class FabricaPipeline:
             # Etapa 4/5: Voz / Legenda
             self._check_cancelled()
             self._progress(4, f"{prefix}{self.STAGES[3]}", 0.66)
-            self._log(f"{prefix}Iniciando etapa 4/5: Gerando narração Edge-TTS e legendas .ass...")
+            self._log(f"{prefix}Etapa 4/5: Gerando narração Edge-TTS e legendas .ass...")
             tts_result = generate_narration_and_subtitles(
                 script_text=script.roteiro,
                 work_dir=job_dir,
@@ -173,7 +170,7 @@ class FabricaPipeline:
             # Etapa 5/5: Render FFmpeg
             self._check_cancelled()
             self._progress(5, f"{prefix}{self.STAGES[4]}", 0.80)
-            self._log(f"{prefix}Iniciando etapa 5/5: Renderizando vídeo final via FFmpeg...")
+            self._log(f"{prefix}Etapa 5/5: Renderizando vídeo final via FFmpeg...")
 
             def _on_ffmpeg_pct(ratio: float) -> None:
                 self._progress(5, f"{prefix}{self.STAGES[4]} ({int(ratio * 100)}%)", 0.80 + 0.20 * ratio)
@@ -197,15 +194,15 @@ class FabricaPipeline:
                 stop_event=self.stop_event,
             )
 
-            # Só atualiza history.json quando o .mp4 foi concluído com sucesso!
             if mp4_path.exists() and mp4_path.stat().st_size > 10_000:
                 append_history(
                     url=article.url,
                     title=article.title,
                     source=article.source,
                     output_file=mp4_path.name,
+                    history_path=history_path,
                 )
-                self._log(f"{prefix}Histórico atualizado em history.json.")
+                self._log(f"{prefix}Histórico do nicho atualizado em {history_path.relative_to(history_path.parent.parent.parent)}.")
 
             self._progress(5, f"{prefix}Concluído!", 1.0)
             return BatchItemResult(
@@ -232,12 +229,16 @@ class FabricaPipeline:
                 self._log(f"{prefix}Arquivos temporários limpos.")
 
     def run_batch(self, count: int = 1) -> list[BatchItemResult]:
-        """Executa geração em lote de N vídeos (1 a 5), evitando repetir notícias."""
+        """Executa geração em lote de 1 a 5 vídeos no nicho selecionado."""
         total = max(1, min(5, int(count)))
         results: list[BatchItemResult] = []
         used_urls: set[str] = set()
 
-        self._log(f"=== Iniciando lote de {total} vídeo(s) | Foco: {self.config.get('clube_foco')} ===")
+        self._log(
+            f"=== Fábrica TK | Lote de {total} vídeo(s) | "
+            f"Nicho: {self.config.get('nicho_nome')} | "
+            f"Modelo: {self.config.get('ollama_modelo')} ==="
+        )
 
         for idx in range(1, total + 1):
             if self.stop_event.is_set():

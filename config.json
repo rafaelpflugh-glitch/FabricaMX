@@ -1,102 +1,28 @@
 {
-  "modo_conteudo": "noticia",
-  "clube_foco": "Club América",
-  "palavras_chave": [
-    "Club América",
-    "América",
-    "Águilas",
-    "Coapa",
-    "Jardine",
-    "Liga MX"
-  ],
-  "presets_clubes": {
-    "Club América": [
-      "Club América",
-      "América",
-      "Águilas",
-      "Coapa",
-      "Jardine",
-      "Liga MX"
-    ],
-    "Chivas": [
-      "Chivas",
-      "Guadalajara",
-      "Rebaño Sagrado",
-      "Akron",
-      "Liga MX"
-    ],
-    "Cruz Azul": [
-      "Cruz Azul",
-      "La Máquina",
-      "Celestes",
-      "La Noria",
-      "Liga MX"
-    ],
-    "Tigres": [
-      "Tigres",
-      "UANL",
-      "Felinos",
-      "Volcán",
-      "Gignac",
-      "Liga MX"
-    ],
-    "Liga MX Geral": [
-      "Liga MX",
-      "Fútbol Mexicano",
-      "Selección Mexicana",
-      "Liguilla",
-      "Clausura",
-      "Apertura"
-    ]
-  },
-  "rss_feeds": [
-    {
-      "nome": "Mediotiempo / Récord / ESPN MX",
-      "url": "https://news.google.com/rss/search?q=(site:mediotiempo.com+OR+site:record.com.mx+OR+site:espn.com.mx)+Liga+MX+when:5d&hl=es-419&gl=MX&ceid=MX:es-419"
-    },
-    {
-      "nome": "Google News Liga MX",
-      "url": "https://news.google.com/rss/search?q=Liga+MX+futbol+when:4d&hl=es-419&gl=MX&ceid=MX:es-419"
-    },
-    {
-      "nome": "ESPN Deportes MX",
-      "url": "https://espndeportes.espn.com/espn/rss/futbol/mexico/news"
-    }
-  ],
+  "nicho_ativo": "gta_vi",
+  "modo_conteudo": "top5",
   "ollama_url": "http://localhost:11434",
-  "ollama_modelo": "qwen2.5:7b",
+  "ollama_modelo": "qwen3:8b",
   "ollama_timeout": 180,
-  "tts_voz": "es-MX-JorgeNeural",
-  "tts_velocidade": "+10%",
+  "tts_velocidade": "+12%",
   "tts_pitch": "-2Hz",
-  "legenda": {
-    "fonte": "Impact",
-    "tamanho_fonte": 88,
-    "cor_ativa": "#00F0FF",
-    "cor_inativa": "#FFFFFF",
-    "cor_contorno": "#000000",
-    "espessura_contorno": 11,
-    "sombra": 3,
-    "palavras_por_bloco": 3,
-    "alinhamento": 5,
-    "margem_inferior": 0
-  },
   "video": {
     "largura": 1080,
     "altura": 1920,
     "fps": 30,
-    "num_imagens_min": 14,
-    "num_imagens_max": 18,
-    "num_imagens_alvo": 16,
+    "num_cenas_min": 18,
+    "num_cenas_max": 24,
+    "num_cenas_alvo": 20,
     "duracao_alvo_min": 60,
     "duracao_alvo_max": 75,
-    "duracao_transicao": 0.25,
+    "duracao_transicao": 0.18,
     "usar_banner_topo": false,
-    "duracao_banner_segundos": 2.8,
-    "duracao_intro_segundos": 5.0,
+    "duracao_banner_segundos": 2.5,
+    "duracao_intro_segundos": 4.5,
     "volume_musica": 0.18,
     "usar_musica": true,
     "usar_intro": true,
+    "usar_broll": true,
     "limpar_temp": true
   }
 }

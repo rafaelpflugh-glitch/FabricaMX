@@ -1,4 +1,4 @@
-"""Módulo de coleta de notícias RSS + busca de notícias recentes e scraping completo da Liga MX."""
+"""Módulo multi-nicho de coleta de notícias recentes (DDGS News + RSS) e scraping completo."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote_plus, urljoin, urlparse
 
@@ -29,41 +30,22 @@ DEFAULT_HEADERS = {
         "Chrome/131.0.0.0 Safari/537.36"
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "es-MX,es;q=0.9,en;q=0.5",
+    "Accept-Language": "pt-BR,pt;q=0.9,es-MX;q=0.8,en;q=0.6",
 }
-
-DEFAULT_RSS_FEEDS = [
-    {
-        "nome": "Mediotiempo / Récord / ESPN MX",
-        "url": "https://news.google.com/rss/search?q=(site:mediotiempo.com+OR+site:record.com.mx+OR+site:espn.com.mx)+Liga+MX+when:5d&hl=es-419&gl=MX&ceid=MX:es-419",
-    },
-    {
-        "nome": "Google News Liga MX",
-        "url": "https://news.google.com/rss/search?q=Liga+MX+futbol+when:4d&hl=es-419&gl=MX&ceid=MX:es-419",
-    },
-    {
-        "nome": "ESPN Deportes MX",
-        "url": "https://espndeportes.espn.com/espn/rss/futbol/mexico/news",
-    },
-]
 
 BOILERPLATE_PHRASES = (
     "cookies",
     "suscríbete",
     "suscribete",
+    "inscreva-se",
     "inicia sesión",
-    "inicia sesion",
     "derechos reservados",
+    "direitos reservados",
     "política de privacidad",
-    "politica de privacidad",
+    "politica de privacidade",
     "te puede interesar",
-    "también puedes leer",
-    "tambien puedes leer",
-    "lee también",
-    "lee tambien",
+    "leia também",
     "descarga la app",
-    "síguenos en",
-    "siguenos en",
     "whatsapp",
     "newsletter",
 )
@@ -77,6 +59,7 @@ LOW_VALUE_TITLE_PATTERNS = (
     "tv channel",
     "what channel",
     "donde ver",
+    "onde assistir",
     "a que hora",
     "horario y transmision",
     "horario y donde",
@@ -90,12 +73,13 @@ LOW_VALUE_TITLE_PATTERNS = (
     "pronostico",
     "odds",
     "prediction",
+    "palpite",
 )
 
 
 @dataclass
 class NewsArticle:
-    """Representa uma notícia coletada e enriquecida com texto completo."""
+    """Representa uma pauta coletada e enriquecida com texto completo."""
 
     title: str
     url: str
@@ -116,13 +100,11 @@ def _log(log_cb: LogCallback | None, msg: str) -> None:
 
 
 def _canonical_url(url: str) -> str:
-    """Normaliza URL removendo query/fragment desnecessários para deduplicação."""
     parsed = urlparse((url or "").strip())
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/").lower()
 
 
 def _parse_date_ts(raw_date: str) -> float:
-    """Converte string RFC2822 ou ISO8601 em timestamp UTC; retorna 0 se inválido."""
     if not raw_date:
         return 0.0
     raw = raw_date.strip()
@@ -145,14 +127,10 @@ def _parse_date_ts(raw_date: str) -> float:
 def _is_too_old(published_ts: float, max_days: int = MAX_ARTICLE_AGE_DAYS) -> bool:
     if published_ts <= 0.0:
         return False
-    age_seconds = datetime.now(timezone.utc).timestamp() - published_ts
-    return age_seconds > max_days * 86400
+    return (datetime.now(timezone.utc).timestamp() - published_ts) > max_days * 86400
 
 
-def _extract_history_sets(
-    history_path=HISTORY_PATH,
-) -> tuple[set[str], set[str]]:
-    """Extrai conjuntos de URLs e títulos já processados do history.json."""
+def _extract_history_sets(history_path: Path) -> tuple[set[str], set[str]]:
     history = load_history(history_path)
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
@@ -182,26 +160,19 @@ def _clean_html_summary(raw_html: str) -> str:
 
 
 def _extract_rss_image(entry: Any) -> str:
-    """Tenta obter imagem diretamente dos campos de mídia do item RSS."""
-    media_content = entry.get("media_content") or []
-    for media in media_content:
+    for media in entry.get("media_content") or []:
         url = media.get("url")
         if url and isinstance(url, str) and url.startswith("http"):
             return url
-
-    media_thumb = entry.get("media_thumbnail") or []
-    for thumb in media_thumb:
+    for thumb in entry.get("media_thumbnail") or []:
         url = thumb.get("url")
         if url and isinstance(url, str) and url.startswith("http"):
             return url
-
-    enclosures = entry.get("enclosures") or []
-    for enc in enclosures:
+    for enc in entry.get("enclosures") or []:
         href = enc.get("href") or enc.get("url")
         mime = enc.get("type", "")
         if href and ("image" in mime or href.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))):
             return href
-
     return ""
 
 
@@ -211,11 +182,7 @@ def scrape_full_article(
     timeout: int = 18,
     log_cb: LogCallback | None = None,
 ) -> tuple[str, str, list[str]]:
-    """
-    Faz scraping do texto completo da matéria e extrai og:image + imagens relevantes.
-
-    Retorna: (full_text, og_image, extra_images)
-    """
+    """Faz scraping do texto completo da matéria e extrai og:image + imagens do corpo."""
     og_image = ""
     extra_images: list[str] = []
 
@@ -230,20 +197,17 @@ def scrape_full_article(
         _log(log_cb, f"[Scraper] Aviso: não foi possível abrir matéria ({exc}). Usando resumo.")
         return fallback_summary, "", []
 
-    # Se caiu em página de consentimento/redirect do Google News sem corpo de notícia
     if "news.google.com" in urlparse(final_url).netloc.lower():
         return fallback_summary, "", []
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # 1) Extrai og:image / twitter:image
-    meta_selectors = [
+    for tag_name, attrs in (
         ("meta", {"property": "og:image"}),
         ("meta", {"property": "og:image:secure_url"}),
         ("meta", {"name": "twitter:image"}),
         ("meta", {"name": "twitter:image:src"}),
-    ]
-    for tag_name, attrs in meta_selectors:
+    ):
         tag = soup.find(tag_name, attrs=attrs)
         if tag and tag.get("content"):
             candidate = urljoin(final_url, tag["content"].strip())
@@ -253,12 +217,11 @@ def scrape_full_article(
                 elif candidate not in extra_images:
                     extra_images.append(candidate)
 
-    # 2) Coleta imagens de dentro do corpo principal antes de limpar tags
     container = (
         soup.find("article")
         or soup.find("main")
         or soup.find("div", class_=lambda c: c and any(
-            k in str(c).lower() for k in ("article", "story", "content", "nota", "body")
+            k in str(c).lower() for k in ("article", "story", "content", "nota", "body", "post")
         ))
         or soup.body
     )
@@ -280,10 +243,9 @@ def scrape_full_article(
                 continue
             if full_img_url.startswith("http") and full_img_url != og_image and full_img_url not in extra_images:
                 extra_images.append(full_img_url)
-            if len(extra_images) >= 5:
+            if len(extra_images) >= 6:
                 break
 
-    # 3) Remove ruído para extrair texto limpo
     for tag in soup.find_all(
         ["script", "style", "noscript", "nav", "footer", "header", "aside", "form", "iframe", "button"]
     ):
@@ -317,14 +279,13 @@ def _score_article(
     summary: str,
     url: str,
     norm_keywords: list[tuple[str, str]],
-    club_focus: str,
+    foco_norm: str,
+    idioma: str,
 ) -> tuple[list[str], int]:
-    """Calcula relevância da notícia, descartando guias de TV/apostas e priorizando notícias reais em espanhol."""
-    generic_terms = {"liga mx", "futbol mexicano", "seleccion mexicana", "liguilla", "clausura", "apertura"}
+    """Pontua relevância da notícia descartando guias de TV/apostas."""
     searchable_title = normalize_text(title)
     searchable_body = normalize_text(f"{title} {summary}")
 
-    # Descarta guias de transmissão ("cómo ver", "how to watch", "dónde ver", apostas)
     if any(pat in searchable_title for pat in LOW_VALUE_TITLE_PATTERNS):
         return [], 0
 
@@ -335,46 +296,53 @@ def _score_article(
             continue
         if norm_kw in searchable_body:
             matched.append(orig_kw)
-            is_generic = norm_kw in generic_terms
-            weight = 1 if is_generic else 5
+            weight = 4
             if norm_kw in searchable_title:
                 weight += 4
-            if club_focus and club_focus in norm_kw:
+            if foco_norm and foco_norm in norm_kw:
                 weight += 3
             score += weight
 
     if matched:
-        # Bônus para portais esportivos em espanhol e URLs diretas
         host = urlparse(url or "").netloc.lower()
-        if any(dom in host for dom in (".mx", "espndeportes", "mediotiempo", "record.com", "tudn", "bolavip", "marca", "as.com", "clarosports", "esto.com")):
-            score += 6
         if "news.google.com" not in host:
             score += 4
+        if idioma.startswith("es") and any(
+            d in host for d in (".mx", "espndeportes", "mediotiempo", "record.com", "tudn", "bolavip", "marca", "clarosports")
+        ):
+            score += 6
+        elif idioma.startswith("pt") and any(
+            d in host for d in (".br", "ign.com", "omelete", "tecmundo", "voxel", "theenemy", "meups", "flowgames", "eurogamer.pt", "uol.com")
+        ):
+            score += 6
 
     return matched, score
 
 
 def _fetch_ddgs_news(
-    club_focus: str,
-    keywords: list[str],
+    config: dict[str, Any],
     log_cb: LogCallback | None = None,
 ) -> list[dict[str, str]]:
-    """Busca notícias frescas da última semana com links diretos via DDGS."""
+    """Busca notícias frescas com links diretos via DDGS News adaptado ao nicho e idioma."""
     if DDGS is None:
         return []
 
-    query = (
-        f"{club_focus} Liga MX noticias"
-        if club_focus and "geral" not in normalize_text(club_focus)
-        else "Liga MX futbol mexicano noticias"
-    )
-    _log(log_cb, f"[Scraper] Buscando notícias recentes diretas: '{query}'...")
+    foco = str(config.get("clube_foco") or config.get("nicho_nome") or "").strip()
+    sufixo = str(config.get("ddgs_news_sufixo") or "noticias").strip()
+    regiao = str(config.get("ddgs_regiao") or "br-pt")
+
+    if "geral" in normalize_text(foco):
+        query = sufixo
+    else:
+        query = f"{foco} {sufixo}".strip()
+
+    _log(log_cb, f"[Scraper] Buscando notícias recentes diretas ({regiao}): '{query}'...")
     try:
         with DDGS() as ddgs:
-            results = ddgs.news(query, region="mx-es", safesearch="moderate", timelimit="w", max_results=20)
+            results = ddgs.news(query, region=regiao, safesearch="moderate", timelimit="w", max_results=20)
             return results or []
     except Exception as exc:
-        _log(log_cb, f"[Scraper] Aviso na busca direta de notícias ({exc}).")
+        _log(log_cb, f"[Scraper] Aviso na busca direta ({exc}).")
         return []
 
 
@@ -384,30 +352,36 @@ def fetch_news_candidates(
     exclude_urls: set[str] | None = None,
     log_cb: LogCallback | None = None,
 ) -> list[NewsArticle]:
-    """
-    Coleta notícias frescas (DDGS News direto + RSS mexicanos), filtra por palavras-chave,
-    descarta matérias antigas (>14 dias) ou presentes em history.json e ordena por relevância.
-    """
-    feeds = list(config.get("rss_feeds") or DEFAULT_RSS_FEEDS)
+    """Coleta notícias recentes para o nicho ativo ignorando itens já presentes no history.json do nicho."""
+    feeds = list(config.get("rss_feeds") or [])
     keywords = [k.strip() for k in config.get("palavras_chave", []) if k and k.strip()]
     if not keywords:
-        keywords = ["Club América", "Águilas", "Liga MX"]
+        keywords = [str(config.get("nicho_nome", "noticias"))]
 
-    club_raw = config.get("clube_foco", "Club América")
-    club_focus = normalize_text(club_raw)
+    foco_raw = str(config.get("clube_foco") or config.get("nicho_nome") or "")
+    foco_norm = normalize_text(foco_raw)
+    idioma = str(config.get("idioma", "pt-BR"))
 
-    # Adiciona feed dinâmico do clube foco no Google News MX (últimos 4 dias)
-    if club_raw and "geral" not in club_focus:
-        club_query = quote_plus(f'"{club_raw}" Liga MX when:4d')
+    # Feed dinâmico do foco no Google News no idioma do nicho
+    if foco_raw and "geral" not in foco_norm:
+        if idioma.startswith("es"):
+            hl, gl, ceid = "es-419", "MX", "MX:es-419"
+        elif idioma.startswith("en"):
+            hl, gl, ceid = "en-US", "US", "US:en"
+        else:
+            hl, gl, ceid = "pt-BR", "BR", "BR:pt-419"
+        q_str = quote_plus(f'"{foco_raw}" when:5d')
         feeds.insert(
             0,
             {
-                "nome": f"Google News ({club_raw})",
-                "url": f"https://news.google.com/rss/search?q={club_query}&hl=es-419&gl=MX&ceid=MX:es-419",
+                "nome": f"Google News ({foco_raw})",
+                "url": f"https://news.google.com/rss/search?q={q_str}&hl={hl}&gl={gl}&ceid={ceid}",
             },
         )
 
-    seen_urls, seen_titles = _extract_history_sets()
+    paths_dict = config.get("paths") or {}
+    history_path = Path(paths_dict["history_path"]) if paths_dict.get("history_path") else HISTORY_PATH
+    seen_urls, seen_titles = _extract_history_sets(history_path)
     if exclude_urls:
         seen_urls.update(_canonical_url(u) for u in exclude_urls)
 
@@ -416,10 +390,10 @@ def fetch_news_candidates(
     candidates: list[NewsArticle] = []
     norm_keywords = [(kw, normalize_text(kw)) for kw in keywords]
 
-    # 1) Busca direta de notícias recentes (links diretos -> scraping completo garantido)
-    ddgs_items = _fetch_ddgs_news(club_raw, keywords, log_cb=log_cb)
+    # 1) DDGS News direto
+    ddgs_items = _fetch_ddgs_news(config, log_cb=log_cb)
     if ddgs_items:
-        _log(log_cb, f"[Scraper] Busca direta: {len(ddgs_items)} notícias recentes encontradas.")
+        _log(log_cb, f"[Scraper] Busca direta: {len(ddgs_items)} notícias encontradas.")
     for item in ddgs_items:
         title = str(item.get("title") or "").strip()
         link = str(item.get("url") or "").strip()
@@ -439,7 +413,7 @@ def fetch_news_candidates(
             continue
 
         summary = str(item.get("body") or "").strip()
-        matched, score = _score_article(title, summary, link, norm_keywords, club_focus)
+        matched, score = _score_article(title, summary, link, norm_keywords, foco_norm, idioma)
         if not matched:
             continue
 
@@ -449,7 +423,7 @@ def fetch_news_candidates(
             NewsArticle(
                 title=title,
                 url=link,
-                source=str(item.get("source") or "Portal MX"),
+                source=str(item.get("source") or "Portal"),
                 published=pub_str,
                 published_ts=pub_ts,
                 summary=summary,
@@ -459,7 +433,7 @@ def fetch_news_candidates(
             )
         )
 
-    # 2) Feeds RSS configurados (Mediotiempo/Récord/ESPN via Google News MX + RSS diretos)
+    # 2) Feeds RSS do nicho
     for feed_idx, feed_info in enumerate(feeds):
         feed_name = feed_info.get("nome", "RSS")
         feed_url = feed_info.get("url", "")
@@ -467,7 +441,7 @@ def fetch_news_candidates(
             continue
 
         if feed_idx > 0 and "news.google.com" in feed_url:
-            time.sleep(0.6)
+            time.sleep(0.55)
 
         _log(log_cb, f"[Scraper] Lendo feed {feed_name}...")
         try:
@@ -500,19 +474,17 @@ def fetch_news_candidates(
                 continue
 
             summary = _clean_html_summary(entry.get("summary") or entry.get("description") or "")
-            matched, score = _score_article(title, summary, link, norm_keywords, club_focus)
+            matched, score = _score_article(title, summary, link, norm_keywords, foco_norm, idioma)
             if not matched:
                 continue
 
             session_urls.add(canon_url)
             session_titles.add(norm_title)
 
-            rss_img = _extract_rss_image(entry)
             source_obj = entry.get("source")
             entry_source = (
                 source_obj.get("title") if isinstance(source_obj, dict) and source_obj.get("title") else feed_name
             )
-
             candidates.append(
                 NewsArticle(
                     title=title,
@@ -521,7 +493,7 @@ def fetch_news_candidates(
                     published=published,
                     published_ts=pub_ts,
                     summary=summary,
-                    og_image=rss_img,
+                    og_image=_extract_rss_image(entry),
                     matched_keywords=matched,
                     score=score,
                 )
@@ -536,9 +508,7 @@ def fetch_next_news(
     exclude_urls: set[str] | None = None,
     log_cb: LogCallback | None = None,
 ) -> NewsArticle:
-    """
-    Busca a melhor notícia recente ainda não processada e faz o scraping do texto completo.
-    """
+    """Seleciona a melhor notícia recente do nicho ativo e extrai o texto completo."""
     candidates = fetch_news_candidates(
         config=config,
         max_candidates=12,
@@ -548,11 +518,10 @@ def fetch_next_news(
 
     if not candidates:
         raise RuntimeError(
-            "Nenhuma notícia nova encontrada para as palavras-chave configuradas. "
-            "Tente ampliar as palavras-chave ou selecionar 'Liga MX Geral'."
+            "Nenhuma notícia nova encontrada para as palavras-chave configuradas neste nicho. "
+            "Tente ampliar as palavras-chave ou alternar para o modo 'Top 5 / Segredos Virais'."
         )
 
-    # Tenta os top 3 candidatos caso o primeiro seja bloqueado por paywall/redirect vazio
     chosen = candidates[0]
     for cand in candidates[:3]:
         full_text, og_image, extra_images = scrape_full_article(

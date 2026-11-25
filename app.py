@@ -1,4 +1,4 @@
-"""FábricaMX - Interface Desktop Minimalista (CustomTkinter)."""
+"""Fábrica TK — Interface Desktop Multi-Nicho (CustomTkinter)."""
 
 from __future__ import annotations
 
@@ -7,11 +7,20 @@ import subprocess
 import sys
 import threading
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import customtkinter as ctk
 
-from src import OUTPUT_DIR, load_config, save_config
+from src import (
+    build_runtime_config,
+    get_niche_paths,
+    list_niches,
+    load_config,
+    load_niche_config,
+    save_config,
+    save_niche_config,
+)
 from src.pipeline import FabricaPipeline
 from src.scraper import NewsArticle
 from src.scriptwriter import ScriptPackage, list_ollama_models
@@ -32,36 +41,23 @@ ACCENT_DANGER = "#EF4444"
 ACCENT_DANGER_HOVER = "#DC2626"
 ACCENT_GREEN = "#22C55E"
 
-VOICES = [
-    "es-MX-JorgeNeural",
-    "es-MX-DaliaNeural",
-]
-
-CLUB_OPTIONS = [
-    "Club América",
-    "Chivas",
-    "Cruz Azul",
-    "Tigres",
-    "Liga MX Geral",
-]
-
 MODE_LABELS = {
-    "noticia": "Notícia Viral (Liga MX)",
-    "top5": "Top 5 Viral (@yaguilas1)",
+    "top5": "Top 5 / Segredos Virais",
+    "noticia": "Notícia / Rumor Viral",
 }
 LABEL_TO_MODE = {v: k for k, v in MODE_LABELS.items()}
 
 PIPELINE_STEPS = [
-    "1/5 Notícia",
+    "1/5 Pauta",
     "2/5 Roteiro",
-    "3/5 Imagens",
+    "3/5 Cenas",
     "4/5 Voz/Ass",
     "5/5 FFmpeg",
 ]
 
 
-class FabricaMXApp(ctk.CTk):
-    """Aplicação Desktop FábricaMX para geração automatizada de TikToks de Liga MX."""
+class FabricaTKApp(ctk.CTk):
+    """Aplicação Desktop Fábrica TK para produção automatizada multi-nicho 9:16."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -69,25 +65,36 @@ class FabricaMXApp(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
 
-        self.title("FábricaMX — Automação TikTok Liga MX")
-        self.geometry("1100x680")
-        self.minsize(1040, 650)
+        self.title("Fábrica TK — Automação Multi-Nicho para TikTok")
+        self.geometry("1120x700")
+        self.minsize(1040, 660)
         self.configure(fg_color=BG_APP)
 
-        self.config_data: dict[str, Any] = load_config()
+        self.global_cfg: dict[str, Any] = load_config()
+        self.niches_list: list[dict[str, Any]] = list_niches()
+        self.niche_name_to_id: dict[str, str] = {n["nome"]: n["id"] for n in self.niches_list}
+        self.niche_id_to_name: dict[str, str] = {n["id"]: n["nome"] for n in self.niches_list}
+
+        self.voice_label_to_meta: dict[str, dict[str, str]] = {}
+        self.voice_id_to_label: dict[str, str] = {}
+
+        self.active_niche_id: str = self.global_cfg.get("nicho_ativo", "gta_vi")
+        if self.active_niche_id not in self.niche_id_to_name and self.niches_list:
+            self.active_niche_id = self.niches_list[0]["id"]
+
+        self.runtime_cfg: dict[str, Any] = build_runtime_config(self.global_cfg, self.active_niche_id)
         self.is_running = False
         self.stop_event = threading.Event()
         self.worker_thread: threading.Thread | None = None
 
         self._build_layout()
-        self._load_values_from_config()
-        self._append_log("FábricaMX pronto. Configure o clube/modelo e clique em GERAR VÍDEOS.")
+        self._apply_niche_to_ui(self.active_niche_id)
+        self._append_log("Fábrica TK pronta! Escolha o nicho, o modelo Ollama e clique em GERAR VÍDEOS.")
 
-        # Busca modelos locais do Ollama em segundo plano ao abrir
         self.after(300, self._refresh_ollama_models_async)
 
     def _build_layout(self) -> None:
-        self.grid_columnconfigure(0, weight=0, minsize=390)
+        self.grid_columnconfigure(0, weight=0, minsize=405)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -106,10 +113,9 @@ class FabricaMXApp(ctk.CTk):
         # Cabeçalho / Marca
         header = ctk.CTkFrame(self.left_panel, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 8))
-        header.grid_columnconfigure(0, weight=1)
 
         brand_row = ctk.CTkFrame(header, fg_color="transparent")
-        brand_row.grid(row=0, column=0, sticky="w")
+        brand_row.pack(fill="x")
 
         ctk.CTkLabel(
             brand_row,
@@ -119,22 +125,22 @@ class FabricaMXApp(ctk.CTk):
         ).pack(side="left")
         ctk.CTkLabel(
             brand_row,
-            text="MX",
+            text="TK",
             font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
             text_color=ACCENT_YELLOW,
-        ).pack(side="left", padx=(2, 8))
-        ctk.CTkLabel(
+        ).pack(side="left", padx=(4, 10))
+        self.niche_badge = ctk.CTkLabel(
             brand_row,
-            text="LIGA MX • 9:16",
+            text="MULTI-NICHO • 9:16",
             font=ctk.CTkFont(family="Consolas", size=11, weight="bold"),
             text_color=ACCENT_CYAN,
             fg_color=BG_CARD,
             corner_radius=6,
             padx=8,
             pady=2,
-        ).pack(side="left")
+        )
+        self.niche_badge.pack(side="left")
 
-        # Área rolável de controles para manter tudo confortável em 1100x680
         controls = ctk.CTkScrollableFrame(
             self.left_panel,
             fg_color="transparent",
@@ -144,31 +150,33 @@ class FabricaMXApp(ctk.CTk):
         controls.grid(row=1, column=0, sticky="nsew", padx=10, pady=2)
         controls.grid_columnconfigure(0, weight=1)
 
-        # 0. Modo de Conteúdo (Notícia Viral vs Top 5 estilo @yaguilas1)
-        self._section_label(controls, "MODO DE CONTEÚDO", row=0)
-        self.mode_var = ctk.StringVar(value=MODE_LABELS["noticia"])
-        self.mode_menu = ctk.CTkOptionMenu(
+        # 0. Seletor de NICHO (pastas em nichos/)
+        self._section_label(controls, "NICHO (PASTA ISOLADA EM nichos/)", row=0)
+        niche_names = [n["nome"] for n in self.niches_list] or ["GTA VI"]
+        self.niche_var = ctk.StringVar(value=self.niche_id_to_name.get(self.active_niche_id, niche_names[0]))
+        self.niche_menu = ctk.CTkOptionMenu(
             controls,
-            values=list(MODE_LABELS.values()),
-            variable=self.mode_var,
+            values=niche_names,
+            variable=self.niche_var,
+            command=self._on_niche_changed,
             fg_color=BG_INPUT,
             button_color=ACCENT_YELLOW,
             button_hover_color=ACCENT_YELLOW_HOVER,
             dropdown_fg_color=BG_CARD,
             dropdown_hover_color=BORDER_SUBTLE,
             text_color=TEXT_PRIMARY,
-            height=34,
+            height=35,
+            font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.mode_menu.grid(row=1, column=0, sticky="ew", padx=6, pady=(2, 8))
+        self.niche_menu.grid(row=1, column=0, sticky="ew", padx=6, pady=(2, 8))
 
-        # 1. Clube / Nicho
-        self._section_label(controls, "CLUBE / NICHO", row=2)
-        self.club_var = ctk.StringVar(value="Club América")
-        self.club_menu = ctk.CTkOptionMenu(
+        # 1. Modo de Conteúdo
+        self._section_label(controls, "MODO DE CONTEÚDO", row=2)
+        self.mode_var = ctk.StringVar(value=MODE_LABELS["top5"])
+        self.mode_menu = ctk.CTkOptionMenu(
             controls,
-            values=CLUB_OPTIONS,
-            variable=self.club_var,
-            command=self._on_club_changed,
+            values=list(MODE_LABELS.values()),
+            variable=self.mode_var,
             fg_color=BG_INPUT,
             button_color=ACCENT_CYAN_DARK,
             button_hover_color=ACCENT_CYAN,
@@ -177,26 +185,44 @@ class FabricaMXApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             height=34,
         )
-        self.club_menu.grid(row=3, column=0, sticky="ew", padx=6, pady=(2, 8))
+        self.mode_menu.grid(row=3, column=0, sticky="ew", padx=6, pady=(2, 8))
+
+        # 2. Sub-foco / Preset do Nicho
+        self._section_label(controls, "SUB-FOCO / PRESET", row=4)
+        self.focus_var = ctk.StringVar(value="")
+        self.focus_menu = ctk.CTkOptionMenu(
+            controls,
+            values=["Geral"],
+            variable=self.focus_var,
+            command=self._on_focus_changed,
+            fg_color=BG_INPUT,
+            button_color=ACCENT_CYAN_DARK,
+            button_hover_color=ACCENT_CYAN,
+            dropdown_fg_color=BG_CARD,
+            dropdown_hover_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=34,
+        )
+        self.focus_menu.grid(row=5, column=0, sticky="ew", padx=6, pady=(2, 8))
 
         # Palavras-chave
-        self._section_label(controls, "PALAVRAS-CHAVE (SEPARADAS POR VÍRGULA)", row=4)
+        self._section_label(controls, "PALAVRAS-CHAVE (PARA MODO NOTÍCIA)", row=6)
         self.keywords_entry = ctk.CTkEntry(
             controls,
-            placeholder_text="Club América, Águilas, Coapa, Liga MX",
+            placeholder_text="Separadas por vírgula",
             fg_color=BG_INPUT,
             border_color=BORDER_SUBTLE,
             text_color=TEXT_PRIMARY,
             height=34,
         )
-        self.keywords_entry.grid(row=5, column=0, sticky="ew", padx=6, pady=(2, 10))
+        self.keywords_entry.grid(row=7, column=0, sticky="ew", padx=6, pady=(2, 10))
 
-        # 2. Voz Edge-TTS
-        self._section_label(controls, "VOZ DE NARRAÇÃO (EDGE-TTS)", row=6)
-        self.voice_var = ctk.StringVar(value=VOICES[0])
+        # 3. Voz / Idioma Edge-TTS
+        self._section_label(controls, "VOZ & IDIOMA (EDGE-TTS)", row=8)
+        self.voice_var = ctk.StringVar(value="")
         self.voice_menu = ctk.CTkOptionMenu(
             controls,
-            values=VOICES,
+            values=["PT-BR • Antonio (Masculino)"],
             variable=self.voice_var,
             fg_color=BG_INPUT,
             button_color=ACCENT_CYAN_DARK,
@@ -206,18 +232,19 @@ class FabricaMXApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             height=34,
         )
-        self.voice_menu.grid(row=7, column=0, sticky="ew", padx=6, pady=(2, 10))
+        self.voice_menu.grid(row=9, column=0, sticky="ew", padx=6, pady=(2, 10))
 
-        # 3. Modelo Ollama + botão Listar Modelos
-        self._section_label(controls, "MODELO OLLAMA LOCAL", row=8)
+        # 4. Modelo Ollama + botão Listar Modelos
+        self._section_label(controls, "MODELO OLLAMA (ALTERNE LIVREMENTE)", row=10)
         ollama_row = ctk.CTkFrame(controls, fg_color="transparent")
-        ollama_row.grid(row=9, column=0, sticky="ew", padx=6, pady=(2, 10))
+        ollama_row.grid(row=11, column=0, sticky="ew", padx=6, pady=(2, 10))
         ollama_row.grid_columnconfigure(0, weight=1)
 
-        self.model_var = ctk.StringVar(value="qwen2.5:7b")
+        default_model = self.global_cfg.get("ollama_modelo", "qwen3:8b")
+        self.model_var = ctk.StringVar(value=default_model)
         self.model_combo = ctk.CTkComboBox(
             ollama_row,
-            values=["qwen2.5:7b"],
+            values=[default_model],
             variable=self.model_var,
             fg_color=BG_INPUT,
             border_color=BORDER_SUBTLE,
@@ -244,9 +271,9 @@ class FabricaMXApp(ctk.CTk):
         )
         self.refresh_models_btn.grid(row=0, column=1)
 
-        # 4. Quantidade de vídeos no lote (1 a 5)
+        # 5. Quantidade de vídeos no lote (1 a 5)
         batch_header = ctk.CTkFrame(controls, fg_color="transparent")
-        batch_header.grid(row=10, column=0, sticky="ew", padx=6, pady=(4, 2))
+        batch_header.grid(row=12, column=0, sticky="ew", padx=6, pady=(4, 2))
         ctk.CTkLabel(
             batch_header,
             text="VÍDEOS NO LOTE",
@@ -274,9 +301,9 @@ class FabricaMXApp(ctk.CTk):
             height=32,
         )
         self.batch_seg.set("1")
-        self.batch_seg.grid(row=11, column=0, sticky="ew", padx=6, pady=(2, 12))
+        self.batch_seg.grid(row=13, column=0, sticky="ew", padx=6, pady=(2, 12))
 
-        # 5. Switches
+        # 6. Switches
         switch_card = ctk.CTkFrame(
             controls,
             fg_color=BG_CARD,
@@ -284,10 +311,11 @@ class FabricaMXApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        switch_card.grid(row=12, column=0, sticky="ew", padx=6, pady=(2, 6))
+        switch_card.grid(row=14, column=0, sticky="ew", padx=6, pady=(2, 6))
         switch_card.grid_columnconfigure(0, weight=1)
 
-        self.music_var = ctk.BooleanVar(value=True)
+        video_cfg = self.global_cfg.get("video", {})
+        self.music_var = ctk.BooleanVar(value=bool(video_cfg.get("usar_musica", True)))
         self.music_switch = ctk.CTkSwitch(
             switch_card,
             text="Usar música de fundo (assets/music)",
@@ -297,21 +325,33 @@ class FabricaMXApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             font=ctk.CTkFont(size=12),
         )
-        self.music_switch.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
+        self.music_switch.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 5))
 
-        self.intro_var = ctk.BooleanVar(value=True)
+        self.broll_var = ctk.BooleanVar(value=bool(video_cfg.get("usar_broll", True)))
+        self.broll_switch = ctk.CTkSwitch(
+            switch_card,
+            text="Usar clipes B-Roll em vídeo (assets/broll)",
+            variable=self.broll_var,
+            progress_color=ACCENT_CYAN_DARK,
+            button_color=ACCENT_CYAN,
+            text_color=TEXT_PRIMARY,
+            font=ctk.CTkFont(size=12),
+        )
+        self.broll_switch.grid(row=1, column=0, sticky="w", padx=12, pady=5)
+
+        self.intro_var = ctk.BooleanVar(value=bool(video_cfg.get("usar_intro", True)))
         self.intro_switch = ctk.CTkSwitch(
             switch_card,
-            text="Usar intro do Flow (assets/intros)",
+            text="Usar intro curta (assets/intros)",
             variable=self.intro_var,
             progress_color=ACCENT_CYAN_DARK,
             button_color=ACCENT_CYAN,
             text_color=TEXT_PRIMARY,
             font=ctk.CTkFont(size=12),
         )
-        self.intro_switch.grid(row=1, column=0, sticky="w", padx=12, pady=6)
+        self.intro_switch.grid(row=2, column=0, sticky="w", padx=12, pady=5)
 
-        self.clean_temp_var = ctk.BooleanVar(value=True)
+        self.clean_temp_var = ctk.BooleanVar(value=bool(video_cfg.get("limpar_temp", True)))
         self.clean_temp_switch = ctk.CTkSwitch(
             switch_card,
             text="Limpar pasta temp ao finalizar",
@@ -321,12 +361,13 @@ class FabricaMXApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             font=ctk.CTkFont(size=12),
         )
-        self.clean_temp_switch.grid(row=2, column=0, sticky="w", padx=12, pady=(6, 10))
+        self.clean_temp_switch.grid(row=3, column=0, sticky="w", padx=12, pady=(5, 10))
 
-        # Botões de ação no rodapé do painel esquerdo
+        # Rodapé de ações
         actions = ctk.CTkFrame(self.left_panel, fg_color="transparent")
         actions.grid(row=2, column=0, sticky="ew", padx=16, pady=(8, 14))
         actions.grid_columnconfigure(0, weight=1)
+        actions.grid_columnconfigure(1, weight=1)
 
         self.generate_btn = ctk.CTkButton(
             actions,
@@ -339,11 +380,11 @@ class FabricaMXApp(ctk.CTk):
             font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
             command=self._on_generate_clicked,
         )
-        self.generate_btn.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        self.generate_btn.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
 
         self.open_output_btn = ctk.CTkButton(
             actions,
-            text="Abrir Pasta Output",
+            text="Abrir Output",
             height=36,
             corner_radius=8,
             fg_color=BG_CARD,
@@ -351,10 +392,25 @@ class FabricaMXApp(ctk.CTk):
             border_width=1,
             border_color=ACCENT_CYAN_DARK,
             text_color=ACCENT_CYAN,
-            font=ctk.CTkFont(size=13, weight="bold"),
+            font=ctk.CTkFont(size=12, weight="bold"),
             command=self._open_output_folder,
         )
-        self.open_output_btn.grid(row=1, column=0, sticky="ew")
+        self.open_output_btn.grid(row=1, column=0, sticky="ew", padx=(0, 4))
+
+        self.open_assets_btn = ctk.CTkButton(
+            actions,
+            text="Pasta B-Roll/Assets",
+            height=36,
+            corner_radius=8,
+            fg_color=BG_CARD,
+            hover_color=BORDER_SUBTLE,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._open_assets_folder,
+        )
+        self.open_assets_btn.grid(row=1, column=1, sticky="ew", padx=(4, 0))
 
         # ==================== PAINEL DIREITO (MONITORAMENTO) ====================
         self.right_panel = ctk.CTkFrame(
@@ -366,10 +422,9 @@ class FabricaMXApp(ctk.CTk):
         )
         self.right_panel.grid(row=0, column=1, sticky="nsew", padx=(7, 14), pady=14)
         self.right_panel.grid_columnconfigure(0, weight=1)
-        self.right_panel.grid_rowconfigure(1, weight=3)  # Prévia
-        self.right_panel.grid_rowconfigure(2, weight=4)  # Console
+        self.right_panel.grid_rowconfigure(1, weight=3)
+        self.right_panel.grid_rowconfigure(2, weight=4)
 
-        # 1. Card de Progresso + Etapas
         progress_card = ctk.CTkFrame(
             self.right_panel,
             fg_color=BG_CARD,
@@ -411,7 +466,6 @@ class FabricaMXApp(ctk.CTk):
         self.progress_bar.set(0.0)
         self.progress_bar.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 10))
 
-        # Indicador visual das 5 etapas
         steps_row = ctk.CTkFrame(progress_card, fg_color="transparent")
         steps_row.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 10))
         self.step_badges: list[ctk.CTkLabel] = []
@@ -429,7 +483,7 @@ class FabricaMXApp(ctk.CTk):
             badge.grid(row=0, column=idx, sticky="ew", padx=3)
             self.step_badges.append(badge)
 
-        # 2. Card de Prévia (Pauta Atual + Roteiro Gerado)
+        # Card de Prévia
         preview_card = ctk.CTkFrame(
             self.right_panel,
             fg_color=BG_CARD,
@@ -460,7 +514,7 @@ class FabricaMXApp(ctk.CTk):
 
         self.hook_preview_label = ctk.CTkLabel(
             preview_card,
-            text="Gancho em tela: —",
+            text="Gancho: —",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=ACCENT_CYAN,
             anchor="w",
@@ -477,10 +531,14 @@ class FabricaMXApp(ctk.CTk):
             wrap="word",
         )
         self.preview_box.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 10))
-        self.preview_box.insert("1.0", "A pauta coletada e o roteiro em espanhol aparecerão aqui em tempo real.")
+        self.preview_box.insert(
+            "1.0",
+            "Dica: jogue clipes .mp4 (ex.: trailer de GTA VI ou gols da Liga MX) em 'Pasta B-Roll/Assets -> broll' "
+            "para misturar vídeo real em movimento com as cenas automáticas!",
+        )
         self.preview_box.configure(state="disabled")
 
-        # 3. Console de Logs (Estilo Terminal)
+        # Console de Logs
         log_card = ctk.CTkFrame(
             self.right_panel,
             fg_color=BG_CARD,
@@ -534,58 +592,81 @@ class FabricaMXApp(ctk.CTk):
             anchor="w",
         ).grid(row=row, column=0, sticky="w", padx=6, pady=(4, 0))
 
-    def _load_values_from_config(self) -> None:
-        modo = str(self.config_data.get("modo_conteudo", "noticia")).strip().lower()
-        self.mode_var.set(MODE_LABELS.get(modo, MODE_LABELS["noticia"]))
+    def _apply_niche_to_ui(self, niche_id: str) -> None:
+        self.active_niche_id = niche_id
+        self.runtime_cfg = build_runtime_config(self.global_cfg, niche_id)
 
-        club = self.config_data.get("clube_foco", "Club América")
-        if club in CLUB_OPTIONS:
-            self.club_var.set(club)
-        keywords = self.config_data.get("palavras_chave", [])
+        self.niche_badge.configure(text=self.runtime_cfg.get("nicho_etiqueta", f"{niche_id.upper()} • 9:16"))
+        modo = str(self.global_cfg.get("modo_conteudo", "top5")).strip().lower()
+        self.mode_var.set(MODE_LABELS.get(modo, MODE_LABELS["top5"]))
+
+        presets = self.runtime_cfg.get("presets_foco") or {}
+        preset_keys = list(presets.keys()) or [self.runtime_cfg.get("nicho_nome", "Geral")]
+        self.focus_menu.configure(values=preset_keys)
+        foco = self.runtime_cfg.get("clube_foco") or preset_keys[0]
+        if foco not in preset_keys:
+            foco = preset_keys[0]
+        self.focus_var.set(foco)
+
+        keywords = self.runtime_cfg.get("palavras_chave") or presets.get(foco) or []
         self.keywords_entry.delete(0, "end")
         self.keywords_entry.insert(0, ", ".join(keywords))
 
-        voice = self.config_data.get("tts_voz", VOICES[0])
-        if voice in VOICES:
-            self.voice_var.set(voice)
+        # Vozes específicas do nicho
+        vozes = self.runtime_cfg.get("vozes") or [
+            {"id": "pt-BR-AntonioNeural", "label": "PT-BR • Antonio", "idioma": "pt-BR"}
+        ]
+        self.voice_label_to_meta = {v["label"]: v for v in vozes}
+        self.voice_id_to_label = {v["id"]: v["label"] for v in vozes}
+        labels = [v["label"] for v in vozes]
+        self.voice_menu.configure(values=labels)
+        cur_voice_id = self.runtime_cfg.get("tts_voz", vozes[0]["id"])
+        self.voice_var.set(self.voice_id_to_label.get(cur_voice_id, labels[0]))
 
-        model = self.config_data.get("ollama_modelo", "qwen2.5:7b")
-        self.model_var.set(model)
-        self.model_combo.configure(values=[model])
+    def _on_niche_changed(self, selected_name: str) -> None:
+        niche_id = self.niche_name_to_id.get(selected_name)
+        if not niche_id:
+            return
+        self._apply_niche_to_ui(niche_id)
+        self._append_log(f"[Nicho] Alterado para '{selected_name}' (pasta: nichos/{niche_id}/)")
 
-        video_cfg = self.config_data.get("video", {})
-        self.music_var.set(bool(video_cfg.get("usar_musica", True)))
-        self.intro_var.set(bool(video_cfg.get("usar_intro", True)))
-        self.clean_temp_var.set(bool(video_cfg.get("limpar_temp", True)))
-
-    def _collect_config_from_ui(self) -> dict[str, Any]:
-        cfg = dict(self.config_data)
-        cfg["modo_conteudo"] = LABEL_TO_MODE.get(self.mode_var.get(), "noticia")
-        cfg["clube_foco"] = self.club_var.get().strip() or "Club América"
-        raw_kw = self.keywords_entry.get()
-        cfg["palavras_chave"] = [k.strip() for k in raw_kw.split(",") if k.strip()]
-        cfg["tts_voz"] = self.voice_var.get().strip() or VOICES[0]
-        cfg["ollama_modelo"] = self.model_var.get().strip() or "qwen2.5:7b"
-
-        video_cfg = dict(cfg.get("video", {}))
-        video_cfg["usar_musica"] = bool(self.music_var.get())
-        video_cfg["usar_intro"] = bool(self.intro_var.get())
-        video_cfg["limpar_temp"] = bool(self.clean_temp_var.get())
-        cfg["video"] = video_cfg
-
-        self.config_data = cfg
-        try:
-            save_config(cfg)
-        except Exception as exc:
-            self._append_log(f"Aviso: não foi possível salvar config.json ({exc}).")
-        return cfg
-
-    def _on_club_changed(self, selected_club: str) -> None:
-        presets = self.config_data.get("presets_clubes", {})
-        preset_kw = presets.get(selected_club)
+    def _on_focus_changed(self, selected_focus: str) -> None:
+        presets = self.runtime_cfg.get("presets_foco") or {}
+        preset_kw = presets.get(selected_focus)
         if preset_kw:
             self.keywords_entry.delete(0, "end")
             self.keywords_entry.insert(0, ", ".join(preset_kw))
+
+    def _collect_runtime_config(self) -> dict[str, Any]:
+        # Atualiza config global
+        self.global_cfg["nicho_ativo"] = self.active_niche_id
+        self.global_cfg["modo_conteudo"] = LABEL_TO_MODE.get(self.mode_var.get(), "top5")
+        self.global_cfg["ollama_modelo"] = self.model_var.get().strip() or "qwen3:8b"
+
+        video_cfg = dict(self.global_cfg.get("video", {}))
+        video_cfg["usar_musica"] = bool(self.music_var.get())
+        video_cfg["usar_broll"] = bool(self.broll_var.get())
+        video_cfg["usar_intro"] = bool(self.intro_var.get())
+        video_cfg["limpar_temp"] = bool(self.clean_temp_var.get())
+        self.global_cfg["video"] = video_cfg
+
+        # Persiste escolhas do nicho atual (voz, foco, palavras-chave)
+        try:
+            save_config(self.global_cfg)
+            niche_data = load_niche_config(self.active_niche_id)
+            voice_meta = self.voice_label_to_meta.get(self.voice_var.get())
+            if voice_meta:
+                niche_data["voz_padrao"] = voice_meta["id"]
+                niche_data["idioma_padrao"] = voice_meta.get("idioma", niche_data.get("idioma_padrao", "pt-BR"))
+            niche_data["foco_padrao"] = self.focus_var.get().strip() or niche_data.get("foco_padrao", "")
+            raw_kw = self.keywords_entry.get()
+            niche_data["palavras_chave"] = [k.strip() for k in raw_kw.split(",") if k.strip()]
+            save_niche_config(self.active_niche_id, niche_data)
+        except Exception as exc:
+            self._append_log(f"Aviso ao salvar configurações: {exc}")
+
+        self.runtime_cfg = build_runtime_config(self.global_cfg, self.active_niche_id)
+        return self.runtime_cfg
 
     def _on_batch_changed(self, val: str) -> None:
         n = int(val)
@@ -595,7 +676,7 @@ class FabricaMXApp(ctk.CTk):
         self.refresh_models_btn.configure(state="disabled", text="...")
 
         def _task() -> None:
-            ollama_url = self.config_data.get("ollama_url", "http://localhost:11434")
+            ollama_url = self.global_cfg.get("ollama_url", "http://localhost:11434")
             try:
                 models = list_ollama_models(ollama_url)
                 self.after(0, lambda: self._on_models_loaded(models, None))
@@ -607,16 +688,16 @@ class FabricaMXApp(ctk.CTk):
     def _on_models_loaded(self, models: list[str], error: str | None) -> None:
         self.refresh_models_btn.configure(state="normal", text="Listar")
         if error:
-            self._append_log(f"[Ollama] Não foi possível listar modelos ({error}). Verifique se 'ollama serve' está ativo.")
+            self._append_log(f"[Ollama] Indisponível ({error}). Verifique se 'ollama serve' está rodando.")
             return
         if not models:
-            self._append_log("[Ollama] Conectado, mas nenhum modelo instalado. Execute ex.: 'ollama pull llama3.1:8b'.")
+            self._append_log("[Ollama] Nenhum modelo instalado. Execute ex.: 'ollama pull qwen3:8b'.")
             return
         self.model_combo.configure(values=models)
         current = self.model_var.get().strip()
         if current not in models:
             self.model_var.set(models[0])
-        self._append_log(f"[Ollama] {len(models)} modelo(s) disponível(is): {', '.join(models)}")
+        self._append_log(f"[Ollama] {len(models)} modelo(s) disponíveis: {', '.join(models)}")
 
     def _append_log(self, message: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
@@ -648,10 +729,10 @@ class FabricaMXApp(ctk.CTk):
         if article is None:
             return
         self.preview_meta_label.configure(text=f"Fonte: {article.source}")
-        lines = [f"PAUTA: {article.title}", f"URL: {article.url}", ""]
+        lines = [f"PAUTA: {article.title}", f"REF: {article.url}", ""]
         if script is not None:
             self.hook_preview_label.configure(
-                text=f"Gancho em tela (3s): {script.gancho_tela}  |  {script.word_count} palavras"
+                text=f"Gancho: {script.gancho_tela}  |  {script.word_count} palavras"
             )
             lines.append("ROTEIRO GERADO:")
             lines.append(script.roteiro)
@@ -659,9 +740,9 @@ class FabricaMXApp(ctk.CTk):
             lines.append(f"DESCRIÇÃO TIKTOK: {script.descricao_tiktok}")
             lines.append(f"HASHTAGS: {' '.join(script.hashtags)}")
         else:
-            self.hook_preview_label.configure(text="Gancho em tela: gerando roteiro no Ollama...")
+            self.hook_preview_label.configure(text="Gancho: gerando roteiro de alta retenção...")
             snippet = (article.full_text or article.summary or "")[:450]
-            lines.append("CONTEXTO DA MATÉRIA:")
+            lines.append("BASE DA PAUTA:")
             lines.append(snippet + ("..." if len(article.full_text) > 450 else ""))
 
         self.preview_box.configure(state="normal")
@@ -673,14 +754,16 @@ class FabricaMXApp(ctk.CTk):
         self.is_running = running
         state = "disabled" if running else "normal"
         for widget in (
+            self.niche_menu,
             self.mode_menu,
-            self.club_menu,
+            self.focus_menu,
             self.keywords_entry,
             self.voice_menu,
             self.model_combo,
             self.refresh_models_btn,
             self.batch_seg,
             self.music_switch,
+            self.broll_switch,
             self.intro_switch,
             self.clean_temp_switch,
         ):
@@ -704,11 +787,11 @@ class FabricaMXApp(ctk.CTk):
     def _on_generate_clicked(self) -> None:
         if self.is_running:
             self.stop_event.set()
-            self._append_log("Solicitação de cancelamento enviada. Aguardando encerramento seguro...")
+            self._append_log("Solicitação de cancelamento enviada. Encerrando com segurança...")
             self.generate_btn.configure(state="disabled", text="CANCELANDO...")
             return
 
-        cfg = self._collect_config_from_ui()
+        cfg = self._collect_runtime_config()
         batch_count = int(self.batch_seg.get())
         self.stop_event.clear()
         self._set_controls_state(True)
@@ -740,25 +823,35 @@ class FabricaMXApp(ctk.CTk):
         if self.stop_event.is_set():
             self.status_label.configure(text=f"Interrompido ({ok}/{total} concluídos)")
         elif ok == total and total > 0:
-            self.status_label.configure(text=f"Finalizado com sucesso! {ok}/{total} vídeo(s) em output/")
+            self.status_label.configure(
+                text=f"Concluído! {ok}/{total} vídeo(s) em nichos/{self.active_niche_id}/output/"
+            )
         else:
             self.status_label.configure(text=f"Finalizado com alertas: {ok}/{total} vídeo(s) gerados")
 
-    def _open_output_folder(self) -> None:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    def _open_folder(self, folder: Path) -> None:
+        folder.mkdir(parents=True, exist_ok=True)
         try:
             if sys.platform.startswith("win"):
-                os.startfile(str(OUTPUT_DIR))  # type: ignore[attr-defined]
+                os.startfile(str(folder))  # type: ignore[attr-defined]
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(OUTPUT_DIR)])
+                subprocess.Popen(["open", str(folder)])
             else:
-                subprocess.Popen(["xdg-open", str(OUTPUT_DIR)])
+                subprocess.Popen(["xdg-open", str(folder)])
         except Exception as exc:
-            self._append_log(f"Não foi possível abrir a pasta output: {exc}")
+            self._append_log(f"Não foi possível abrir pasta ({exc}).")
+
+    def _open_output_folder(self) -> None:
+        paths = get_niche_paths(self.active_niche_id)
+        self._open_folder(paths["output_dir"])
+
+    def _open_assets_folder(self) -> None:
+        paths = get_niche_paths(self.active_niche_id)
+        self._open_folder(paths["assets_dir"])
 
 
 def main() -> None:
-    app = FabricaMXApp()
+    app = FabricaTKApp()
     app.mainloop()
 
 
