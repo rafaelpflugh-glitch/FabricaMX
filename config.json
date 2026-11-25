@@ -50,28 +50,16 @@
   },
   "rss_feeds": [
     {
-      "nome": "ESPN México",
-      "url": "https://www.espn.com.mx/espn/rss/futbol/news"
+      "nome": "Mediotiempo / Récord / ESPN MX",
+      "url": "https://news.google.com/rss/search?q=(site:mediotiempo.com+OR+site:record.com.mx+OR+site:espn.com.mx)+Liga+MX+when:5d&hl=es-419&gl=MX&ceid=MX:es-419"
+    },
+    {
+      "nome": "Google News Liga MX",
+      "url": "https://news.google.com/rss/search?q=Liga+MX+futbol+when:4d&hl=es-419&gl=MX&ceid=MX:es-419"
     },
     {
       "nome": "ESPN Deportes MX",
       "url": "https://espndeportes.espn.com/espn/rss/futbol/mexico/news"
-    },
-    {
-      "nome": "ESPN Deportes Fútbol",
-      "url": "https://espndeportes.espn.com/espn/rss/futbol/news"
-    },
-    {
-      "nome": "Mediotiempo",
-      "url": "https://www.mediotiempo.com/rss/xml"
-    },
-    {
-      "nome": "Récord",
-      "url": "https://www.record.com.mx/rss.xml"
-    },
-    {
-      "nome": "AS México",
-      "url": "https://mexico.as.com/rss/mexico/futbol.xml"
     }
   ],
   "ollama_url": "http://localhost:11434",

@@ -18,6 +18,11 @@ GREETING_PATTERNS = (
     r"saludos|amigos|afición|banda|mi gente)\b[^.!?]*[.!?]\s*"
 )
 
+INLINE_GREETING_PATTERNS = (
+    r"\b(hoy les traigo(?: la noticia de que)?|les traigo(?: una noticia)?|"
+    r"hola a todos|qué tal amigos|que tal amigos|bienvenidos a un nuevo video)\b[:,]?\s*"
+)
+
 
 @dataclass
 class ScriptPackage:
@@ -97,8 +102,9 @@ def _clean_script_text(text: str) -> str:
         "",
         s,
     )
-    # Remove saudações genéricas se o modelo teimar em colocar
+    # Remove saudações genéricas no início ou no meio do roteiro
     s = re.sub(GREETING_PATTERNS, "", s, flags=re.IGNORECASE)
+    s = re.sub(INLINE_GREETING_PATTERNS, "", s, flags=re.IGNORECASE)
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
@@ -154,17 +160,21 @@ REGLAS ESTRICTAS (OBLIGATORIAS):
    - "descricao_tiktok": string
    - "hashtags": array de 6 a 8 strings
 3. Reglas para "roteiro":
-   - Idioma: Español mexicano coloquial, vibrante, directo y apasionado (usa expresiones naturales del fútbol mexicano como "la afición", "bombazo", "la neta", "en la cancha", "se prendió todo", sin exagerar ni perder credibilidad periodística).
-   - Extensión EXACTA: entre 155 y 180 palabras (cuenta bien las palabras para superar 1 minuto de locución).
-   - PROHIBIDO empezar con saludos genéricos ("Hola", "Qué tal", "Bienvenidos", "Amigos", "Hoy les traigo").
-   - Abre INMEDIATAMENTE con un gancho polémico, impactante o urgente sobre la noticia.
-   - Desarrolla el contexto real, los nombres clave de jugadores/técnicos/directivos y el impacto en la Liga MX.
-   - Cierra con una pregunta directa y provocativa para detonar debate en los comentarios.
-   - Texto plano listo para narración (TTS): SIN emojis, SIN corchetes, SIN indicaciones de cámara, SIN asteriscos.
+   - Idioma: Español mexicano coloquial, vibrante, directo y apasionado (usa expresiones naturales del fútbol mexicano como "la afición", "bombazo", "la neta", "en la cancha", "se prendió todo", sin perder credibilidad periodística).
+   - Extensión OBLIGATORIA: entre 170 y 195 palabras (para superar los 60 segundos de narración a velocidad +8%). NO escribas un resumen corto de 100 palabras.
+   - Estructura en 5 bloques fluidos unidos en un solo texto continuo (aprox. 35 palabras por bloque):
+     1) Gancho explosivo y polémico en la primera frase.
+     2) Qué ocurrió exactamente, quiénes son los protagonistas, cifras o detalles clave de la noticia.
+     3) Qué está pasando en el vestidor, la directiva o con el técnico y por qué importa tanto.
+     4) Consecuencias reales para la tabla, la Liguilla, el torneo actual o la rivalidad en la Liga MX.
+     5) Remate intenso + pregunta provocativa directa para detonar debate en los comentarios.
+   - PROHIBIDO inventar hechos falsos (en la Liga MX actual NO existe el descenso). Basa todos los nombres, marcadores y datos estrictamente en la noticia proporcionada.
+   - PROHIBIDO usar saludos o muletillas ("Hola", "Qué tal", "Bienvenidos", "Amigos", "Hoy les traigo").
+   - Texto plano listo para narración (TTS): SIN emojis, SIN corchetes, SIN indicaciones de cámara, SIN numeraciones, SIN asteriscos.
 4. Reglas para "gancho_tela":
-   - Texto MUY corto (3 a 6 palabras) EN MAYÚSCULAS para un banner de 3 segundos en pantalla (ejemplo: "¡BOMBAZO EN COAPA!" o "¿TRAICIÓN EN LA LIGA MX?").
+   - Texto MUY corto (3 a 6 palabras) EN MAYÚSCULAS para un banner de 3 segundos en pantalla (ejemplo: "¡BOMBAZO EN COAPA!" o "¿CRISIS EN EL AMÉRICA?").
 5. Reglas para "termos_busca_imagens":
-   - Lista de exactamente 5 términos de búsqueda en español muy específicos sobre los jugadores, técnicos, clubes y estadio mencionados en la noticia (para buscar fotografías reales de fútbol).
+   - Lista de exactamente 5 frases específicas de búsqueda en español (mínimo 3 palabras cada una) sobre los jugadores, técnicos, clubes y estadio mencionados en la noticia (ejemplo: "Club America jugadores partido Liga MX", "Andre Jardine director tecnico America"). NO pongas palabras sueltas genéricas como "clubes".
 6. Reglas para "descricao_tiktok":
    - 1 o 2 frases llamativas en español mexicano que inviten a comentar.
 7. Reglas para "hashtags":
@@ -174,14 +184,27 @@ Devuelve SOLO el JSON:"""
 
 
 def _build_length_adjustment_prompt(current_json: dict[str, Any], current_words: int) -> str:
-    direction = "EXPANDE" if current_words < 155 else "RECORTE"
-    return f"""El siguiente JSON tiene un "roteiro" con {current_words} palabras, pero DEBE tener ESTRICTAMENTE entre 155 y 180 palabras.
-{direction} el campo "roteiro" para que quede entre 160 y 175 palabras manteniendo:
+    if current_words < 165:
+        missing = max(25, 182 - current_words)
+        instruction = (
+            f"El 'roteiro' actual es DEMASIADO CORTO ({current_words} palabras). "
+            f"Faltan al menos {missing} palabras para superar 1 minuto de video. "
+            f"REESCRIBE y EXPANDE el campo 'roteiro' a 180-195 palabras agregando análisis táctico, "
+            f"reacción de la afición, contexto en la Liga MX y lo que viene en las próximas jornadas."
+        )
+    else:
+        instruction = (
+            f"El 'roteiro' actual es DEMASIADO LARGO ({current_words} palabras). "
+            f"RECORTE el campo 'roteiro' para quedar entre 170 y 190 palabras manteniendo el ritmo ágil."
+        )
+
+    return f"""{instruction}
+Reglas obligatorias:
 - Español mexicano coloquial y apasionado
-- Sin saludos genéricos al inicio (gancho polémico directo)
+- PROHIBIDO saludos o 'Hoy les traigo'
 - Mismos datos reales de la noticia
 - Cierre con pregunta provocativa para comentarios
-- Sin emojis, corchetes ni asteriscos
+- Sin emojis, corchetes, numeraciones ni asteriscos
 Mantén las otras 4 claves intactas ("gancho_tela", "termos_busca_imagens", "descricao_tiktok", "hashtags").
 
 JSON ACTUAL:
@@ -257,11 +280,13 @@ def generate_script(
     wc = _count_words(roteiro)
     _log(log_cb, f"[Scriptwriter] Roteiro inicial gerado com {wc} palavras.")
 
-    # Ajuste automático se fugir muito da faixa 155-180 palavras
-    if wc < 145 or wc > 195:
+    # Ajuste automático em até 2 passadas para garantir duração > 60s (165-205 palavras a +8%)
+    for adj_try in range(1, 3):
+        if 162 <= wc <= 205:
+            break
         _log(
             log_cb,
-            f"[Scriptwriter] Ajustando tamanho do roteiro ({wc} palavras -> alvo 155-180)...",
+            f"[Scriptwriter] Ajustando tamanho do roteiro ({wc} palavras -> alvo 170-195, tentativa {adj_try}/2)...",
         )
         try:
             data["roteiro"] = roteiro
@@ -270,13 +295,14 @@ def generate_script(
             adj_data = _parse_json_response(adj_raw)
             adj_roteiro = _clean_script_text(str(adj_data.get("roteiro", "")))
             adj_wc = _count_words(adj_roteiro)
-            if abs(adj_wc - 168) < abs(wc - 168) and adj_wc >= 110:
+            if abs(adj_wc - 182) < abs(wc - 182) and adj_wc >= 115:
                 data = adj_data
                 roteiro = adj_roteiro
                 wc = adj_wc
                 _log(log_cb, f"[Scriptwriter] Roteiro ajustado para {wc} palavras.")
         except Exception as exc:
-            _log(log_cb, f"[Scriptwriter] Aviso no ajuste de palavras ({exc}). Mantendo versão inicial.")
+            _log(log_cb, f"[Scriptwriter] Aviso no ajuste de palavras ({exc}). Mantendo versão atual.")
+            break
 
     gancho = str(data.get("gancho_tela") or "").strip().upper()
     gancho = re.sub(r"[\r\n]+", " ", gancho)

@@ -12,9 +12,11 @@ import requests
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
+    _DDGS_USE_QUERY_ARG = True
 except ImportError:  # pragma: no cover
-    from ddgs import DDGS  # type: ignore
+    from duckduckgo_search import DDGS  # type: ignore
+    _DDGS_USE_QUERY_ARG = False
 
 LogCallback = Callable[[str], None]
 
@@ -51,7 +53,8 @@ def _log(log_cb: LogCallback | None, msg: str) -> None:
 def _compute_dhash(img: Image.Image, hash_size: int = 8) -> int:
     """Calcula perceptual dHash rápido para evitar imagens duplicadas."""
     resized = img.convert("L").resize((hash_size + 1, hash_size), Image.Resampling.BILINEAR)
-    pixels = list(resized.getdata())
+    getter = getattr(resized, "get_flattened_data", resized.getdata)
+    pixels = list(getter())
     bits = 0
     for row in range(hash_size):
         row_start = row * (hash_size + 1)
@@ -184,17 +187,25 @@ def normalize_image_to_vertical(
     return canvas
 
 
-def _search_ddg_images(query: str, max_results: int = 8) -> list[str]:
-    """Busca URLs de imagem via duckduckgo-search com proteção contra rate-limit."""
+def _search_ddg_images(query: str, max_results: int = 10) -> list[str]:
+    """Busca URLs de imagem via ddgs (ou duckduckgo-search) com proteção contra rate-limit."""
     urls: list[str] = []
     try:
         with DDGS() as ddgs:
-            results = ddgs.images(
-                keywords=query,
-                region="mx-es",
-                safesearch="moderate",
-                max_results=max_results,
-            )
+            if _DDGS_USE_QUERY_ARG:
+                results = ddgs.images(
+                    query=query,
+                    region="mx-es",
+                    safesearch="moderate",
+                    max_results=max_results,
+                )
+            else:
+                results = ddgs.images(
+                    keywords=query,
+                    region="mx-es",
+                    safesearch="moderate",
+                    max_results=max_results,
+                )
             for item in results or []:
                 img_url = item.get("image") or item.get("thumbnail")
                 if img_url and isinstance(img_url, str) and img_url.startswith("http"):

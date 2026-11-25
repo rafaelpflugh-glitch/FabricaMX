@@ -4,4 +4,5 @@ beautifulsoup4>=4.12.3
 requests>=2.32.3
 edge-tts>=6.1.12
 Pillow>=10.4.0
+ddgs>=9.0.0
 duckduckgo-search>=6.2.0

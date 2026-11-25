@@ -608,6 +608,11 @@ def render_video(
         if proc.poll() is None:
             proc.kill()
         raise
+    finally:
+        if proc.stdout:
+            proc.stdout.close()
+        if proc.stderr:
+            proc.stderr.close()
 
     if ret != 0 or not output_mp4.exists() or output_mp4.stat().st_size < 10_000:
         err_context = "\n".join(stderr_tail[-12:])
