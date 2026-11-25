@@ -6,3 +6,4 @@ edge-tts>=6.1.12
 Pillow>=10.4.0
 ddgs>=9.0.0
 duckduckgo-search>=6.2.0
+yt-dlp>=2025.1.15

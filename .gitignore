@@ -4,13 +4,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Arquivos temporários e vídeos gerados localmente
+# Arquivos temporários, vídeos gerados e B-Roll pesados locais
 temp/*
 !temp/.gitkeep
 output/*
 !output/.gitkeep
 nichos/*/output/*
 !nichos/*/output/.gitkeep
+nichos/*/assets/broll/*.mp4
+nichos/*/assets/broll/*.mov
+nichos/*/assets/broll/*.mkv
+nichos/*/assets/broll/*.webm
 
 # Sistema operacional / IDEs
 .DS_Store

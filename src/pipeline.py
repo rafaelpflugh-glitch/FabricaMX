@@ -15,6 +15,7 @@ from src.scraper import NewsArticle, fetch_next_news
 from src.scriptwriter import ScriptPackage, generate_script, pick_next_top5_topic
 from src.tts_subtitles import generate_narration_and_subtitles
 from src.video_engine import render_video
+from src.video_fetcher import ensure_broll_videos
 
 LogCallback = Callable[[str], None]
 ProgressCallback = Callable[[int, int, str, float], None]
@@ -141,18 +142,35 @@ class FabricaPipeline:
                 self.on_preview(article, script)
             self._progress(2, f"{prefix}{self.STAGES[1]}", 0.40)
 
-            # Etapa 3/5: Cenas/Imagens
+            # Etapa 3/5: Vídeo Real HD (yt-dlp automático) ou Fallback Fotos HD
             self._check_cancelled()
             self._progress(3, f"{prefix}{self.STAGES[2]}", 0.44)
-            self._log(f"{prefix}Etapa 3/5: Buscando e normalizando cenas de ação (1080x1920)...")
-            image_paths = fetch_and_prepare_images(
-                search_terms=script.termos_busca_imagens,
-                output_dir=job_dir,
-                config=self.config,
-                og_image=article.og_image,
-                article_images=article.article_images,
-                log_cb=self._log,
-            )
+            usar_broll = bool(self.config.get("video", {}).get("usar_broll", True))
+            custom_video_url = str(self.config.get("video_url_opcional") or "").strip()
+            placar_texto = str(self.config.get("placar_opcional") or "").strip()
+
+            broll_videos: list[Path] = []
+            if usar_broll or custom_video_url:
+                self._log(f"{prefix}Etapa 3/5: Preparando vídeo real 1080p HD (lances / gameplay oficial)...")
+                broll_videos = ensure_broll_videos(
+                    config=self.config,
+                    article_title=article.title,
+                    work_dir=job_dir,
+                    custom_video_url=custom_video_url,
+                    log_cb=self._log,
+                )
+
+            image_paths: list[Path] = []
+            if not broll_videos:
+                self._log(f"{prefix}Etapa 3/5: Sem clipe de vídeo disponível — buscando fotos HD de fallback...")
+                image_paths = fetch_and_prepare_images(
+                    search_terms=script.termos_busca_imagens,
+                    output_dir=job_dir,
+                    config=self.config,
+                    og_image=article.og_image,
+                    article_images=article.article_images,
+                    log_cb=self._log,
+                )
             self._progress(3, f"{prefix}{self.STAGES[2]}", 0.62)
 
             # Etapa 4/5: Voz / Legenda
@@ -189,6 +207,8 @@ class FabricaPipeline:
                 roteiro=script.roteiro,
                 work_dir=job_dir,
                 config=self.config,
+                broll_videos=broll_videos,
+                placar_texto=placar_texto,
                 log_cb=self._log,
                 progress_cb=_on_ffmpeg_pct,
                 stop_event=self.stop_event,

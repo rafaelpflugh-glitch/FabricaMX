@@ -22,25 +22,41 @@
   "ddgs_news_sufixo": "GTA 6 Rockstar Games noticias",
   "rss_feeds": [
     {
-      "nome": "Google News GTA VI (BR)",
-      "url": "https://news.google.com/rss/search?q=(%22GTA+6%22+OR+%22GTA+VI%22)+Rockstar+when:7d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+      "nome": "IGN Brasil",
+      "url": "https://br.ign.com/feed.xml"
     },
     {
-      "nome": "Google News GTA VI (EN)",
-      "url": "https://news.google.com/rss/search?q=(%22GTA+6%22+OR+%22GTA+VI%22)+Rockstar+when:7d&hl=en-US&gl=US&ceid=US:en"
+      "nome": "Eurogamer PT",
+      "url": "https://www.eurogamer.pt/feed"
+    },
+    {
+      "nome": "Flow Games",
+      "url": "https://flowgames.gg/feed/"
+    },
+    {
+      "nome": "Gigaton Games (YouTube)",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCAjKLSz8h3XJM5CSJWvmoNA"
+    },
+    {
+      "nome": "Google News GTA VI (IGN/Flow/Omelete)",
+      "url": "https://news.google.com/rss/search?q=(%22GTA+6%22+OR+%22GTA+VI%22)+(site:br.ign.com+OR+site:flowgames.gg+OR+site:omelete.com.br+OR+site:eurogamer.pt+OR+site:theenemy.com.br)+when:7d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    },
+    {
+      "nome": "IGN US",
+      "url": "https://feeds.feedburner.com/ign/all"
     }
   ],
   "legenda": {
     "fonte": "Impact",
-    "tamanho_fonte": 88,
+    "tamanho_fonte": 82,
     "cor_ativa": "#FF2ED1",
     "cor_inativa": "#FFFFFF",
     "cor_contorno": "#000000",
-    "espessura_contorno": 11,
+    "espessura_contorno": 10,
     "sombra": 3,
     "palavras_por_bloco": 3,
-    "alinhamento": 5,
-    "margem_inferior": 0
+    "alinhamento": 2,
+    "margem_inferior": 395
   },
   "imagem_ancoras": ["gta", "grand theft auto", "rockstar", "vice city", "leonida", "lucia", "jason", "trailer", "gameplay", "screenshot"],
   "imagem_sufixo_padrao": "GTA 6 Rockstar Games Vice City screenshot 4K",

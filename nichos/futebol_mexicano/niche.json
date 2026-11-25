@@ -30,15 +30,15 @@
   ],
   "legenda": {
     "fonte": "Impact",
-    "tamanho_fonte": 88,
-    "cor_ativa": "#00F0FF",
+    "tamanho_fonte": 82,
+    "cor_ativa": "#FACC15",
     "cor_inativa": "#FFFFFF",
     "cor_contorno": "#000000",
-    "espessura_contorno": 11,
+    "espessura_contorno": 10,
     "sombra": 3,
     "palavras_por_bloco": 3,
-    "alinhamento": 5,
-    "margem_inferior": 0
+    "alinhamento": 2,
+    "margem_inferior": 395
   },
   "imagem_ancoras": ["futbol", "soccer", "liga mx", "jugador", "gol", "partido", "cancha", "remate", "celebracion", "portero", "estadio"],
   "imagem_sufixo_padrao": "jugadores gol accion partido Liga MX",

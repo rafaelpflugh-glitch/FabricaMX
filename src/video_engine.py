@@ -1,4 +1,4 @@
-"""Motor de renderização multi-nicho 1080x1920@30fps via FFmpeg com B-Roll automático e cortes rápidos."""
+"""Motor de renderização multi-nicho 1080x1920@30fps com 100% vídeo real HD e enquadramento limpo."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from typing import Any, Callable
 from PIL import Image, ImageDraw, ImageFont
 
 from src import BRANDING_DIR, INTROS_DIR, MUSIC_DIR, OUTPUT_DIR, slugify
+from src.video_fetcher import build_video_scene_slices
 
 LogCallback = Callable[[str], None]
 ProgressCallback = Callable[[float], None]
@@ -51,7 +52,6 @@ def escape_ffmpeg_filter_path(path: Path) -> str:
 
 
 def probe_media_duration(media_path: Path) -> float:
-    """Retorna a duração em segundos de um vídeo/áudio via ffprobe."""
     cmd = [
         "ffprobe",
         "-v",
@@ -117,61 +117,68 @@ def _wrap_text_pixels(
             lines.append(current)
             current = word
     lines.append(current)
-    return lines[:3]
+    return lines[:2]
 
 
 def create_hook_banner_png(
     hook_text: str,
     output_path: Path,
     club_label: str = "FÁBRICA TK",
+    accent_rgb: tuple[int, int, int] = (250, 204, 21),
     width: int = 1080,
     height: int = 1920,
 ) -> Path:
-    """Cria um banner PNG transparente opcional de alto impacto para os primeiros segundos."""
+    """
+    Cria banner limpo posicionado na zona superior (y=120..315), logo acima do viewport 1080x1080
+    para nunca tampar jogadores, bola ou personagens de GTA VI.
+    """
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
-    title_font = _load_windows_font(size=60, bold=True)
-    badge_font = _load_windows_font(size=30, bold=True)
+    title_font = _load_windows_font(size=54, bold=True)
+    badge_font = _load_windows_font(size=26, bold=True)
 
     clean_hook = (hook_text or "NOVIDADE!").strip().upper()
-    card_margin_x = 68
+    card_margin_x = 64
     card_w = width - (card_margin_x * 2)
-    text_max_w = card_w - 84
+    text_max_w = card_w - 72
 
     lines = _wrap_text_pixels(draw, clean_hook, title_font, text_max_w) or ["NOVIDADE!"]
-    line_heights = [draw.textbbox((0, 0), line, font=title_font)[3] - draw.textbbox((0, 0), line, font=title_font)[1] for line in lines]
+    line_heights = [
+        draw.textbbox((0, 0), line, font=title_font)[3] - draw.textbbox((0, 0), line, font=title_font)[1]
+        for line in lines
+    ]
 
-    line_spacing = 16
+    line_spacing = 12
     total_text_h = sum(line_heights) + line_spacing * (len(lines) - 1)
-    pad_top, pad_bottom = 48, 42
-    card_h = total_text_h + pad_top + pad_bottom
+    pad_top, pad_bottom = 38, 28
+    card_h = min(200, total_text_h + pad_top + pad_bottom)
 
-    card_x0, card_y0 = card_margin_x, 235
+    card_x0, card_y0 = card_margin_x, 128
     card_x1, card_y1 = card_x0 + card_w, card_y0 + card_h
 
-    draw.rounded_rectangle((card_x0 + 8, card_y0 + 12, card_x1 + 8, card_y1 + 12), radius=28, fill=(0, 0, 0, 150))
+    draw.rounded_rectangle((card_x0 + 6, card_y0 + 8, card_x1 + 6, card_y1 + 8), radius=24, fill=(0, 0, 0, 150))
     draw.rounded_rectangle(
         (card_x0, card_y0, card_x1, card_y1),
-        radius=28,
-        fill=(12, 17, 28, 226),
-        outline=(250, 204, 21, 255),
-        width=6,
+        radius=24,
+        fill=(10, 14, 24, 232),
+        outline=(*accent_rgb, 255),
+        width=5,
     )
 
-    badge_text = f"DESTAQUE  •  {club_label.upper()}"
+    badge_text = f"URGENTE  •  {club_label.upper()}"
     b_box = draw.textbbox((0, 0), badge_text, font=badge_font)
-    badge_w = (b_box[2] - b_box[0]) + 54
-    badge_h = (b_box[3] - b_box[1]) + 22
+    badge_w = (b_box[2] - b_box[0]) + 46
+    badge_h = (b_box[3] - b_box[1]) + 18
     badge_x0 = (width - badge_w) // 2
-    badge_y0 = card_y0 - (badge_h // 2) - 4
+    badge_y0 = card_y0 - (badge_h // 2) - 2
 
     draw.rounded_rectangle(
         (badge_x0, badge_y0, badge_x0 + badge_w, badge_y0 + badge_h),
-        radius=16,
+        radius=14,
         fill=(220, 38, 38, 255),
         outline=(255, 255, 255, 220),
-        width=3,
+        width=2,
     )
     draw.text(
         (width // 2, badge_y0 + badge_h // 2),
@@ -187,13 +194,56 @@ def create_hook_banner_png(
             (width // 2, cur_y + lh // 2),
             line,
             font=title_font,
-            fill=(250, 204, 21, 255),
+            fill=(*accent_rgb, 255),
             anchor="mm",
             stroke_width=4,
             stroke_fill=(0, 0, 0, 255),
         )
         cur_y += lh + line_spacing
 
+    canvas.save(output_path, format="PNG")
+    return output_path
+
+
+def create_scoreboard_png(
+    placar_texto: str,
+    output_path: Path,
+    width: int = 1080,
+    height: int = 1920,
+) -> Path:
+    """Cria overlay de placar esportivo limpo no rodapé (y=1565) estilo crônica viral."""
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    font = _load_windows_font(size=54, bold=True)
+
+    label = placar_texto.strip().upper()
+    bbox = draw.textbbox((0, 0), label, font=font)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+
+    pad_x, pad_y = 52, 24
+    box_w = min(width - 80, tw + pad_x * 2)
+    box_h = th + pad_y * 2
+    x0 = (width - box_w) // 2
+    y0 = 1565
+
+    draw.rounded_rectangle((x0 + 5, y0 + 7, x0 + box_w + 5, y0 + box_h + 7), radius=22, fill=(0, 0, 0, 160))
+    draw.rounded_rectangle(
+        (x0, y0, x0 + box_w, y0 + box_h),
+        radius=22,
+        fill=(12, 18, 30, 232),
+        outline=(250, 204, 21, 255),
+        width=5,
+    )
+    draw.text(
+        (width // 2, y0 + box_h // 2),
+        label,
+        font=font,
+        fill=(255, 255, 255, 255),
+        anchor="mm",
+        stroke_width=4,
+        stroke_fill=(0, 0, 0, 255),
+    )
     canvas.save(output_path, format="PNG")
     return output_path
 
@@ -208,64 +258,17 @@ def _pick_random_asset(folders: list[Path], extensions: tuple[str, ...]) -> Path
     return None
 
 
-def _collect_broll_slices(
-    broll_dir: Path,
-    clip_dur: float,
-    max_slices: int,
-) -> list[tuple[Path, float]]:
-    """
-    Coleta fatias não repetidas (arquivo, timestamp_inicio) a partir de clipes .mp4 em assets/broll/.
-    Permite fatiar automaticamente um trailer (ex.: GTA VI) ou vídeo de lances da Liga MX!
-    """
-    if not broll_dir.exists() or max_slices <= 0:
-        return []
-
-    video_exts = (".mp4", ".mov", ".mkv", ".webm")
-    files = sorted([p for p in broll_dir.iterdir() if p.is_file() and p.suffix.lower() in video_exts])
-    if not files:
-        return []
-
-    pool: list[tuple[Path, float]] = []
-    for vf in files:
-        dur = probe_media_duration(vf)
-        if dur < clip_dur + 0.5:
-            continue
-        # Pula os 2 primeiros e 2 últimos segundos em vídeos longos para evitar telas pretas/logos
-        start_margin = 2.0 if dur > 15.0 else 0.2
-        end_limit = dur - clip_dur - (2.0 if dur > 15.0 else 0.2)
-        if end_limit <= start_margin:
-            pool.append((vf, 0.0))
-            continue
-
-        usable = end_limit - start_margin
-        step = max(clip_dur + 1.2, usable / max(1, min(14, max_slices)))
-        t = start_margin
-        while t <= end_limit:
-            pool.append((vf, round(t, 2)))
-            t += step
-
-    if not pool:
-        return []
-
-    random.shuffle(pool)
-    return pool[:max_slices]
-
-
 def _generate_cinematic_bed(work_dir: Path, niche_id: str = "gta_vi") -> Path:
-    """
-    Gera trilha instrumental pulsante livre de direitos autorais (116 BPM) como fallback
-    quando a pasta assets/music/ do nicho ainda está vazia.
-    """
+    """Gera trilha instrumental pulsante livre de direitos autorais (fallback se assets/music vazio)."""
     wav_path = work_dir / "auto_tension_bed.wav"
     sr = 22050
-    bpm = 118.0 if niche_id == "gta_vi" else 112.0
+    bpm = 118.0 if niche_id == "gta_vi" else 114.0
     beat_dur = 60.0 / bpm
     total_beats = 16
     duration = total_beats * beat_dur
     num_samples = int(sr * duration)
 
     if niche_id == "gta_vi":
-        # Progressão Synthwave Vice City (Am - F - C - G)
         chords = [
             (55.00, 220.00, 261.63, 329.63),
             (43.65, 174.61, 220.00, 261.63),
@@ -273,7 +276,6 @@ def _generate_cinematic_bed(work_dir: Path, niche_id: str = "gta_vi") -> Path:
             (49.00, 196.00, 246.94, 293.66),
         ]
     else:
-        # Progressão Épica Esportiva (Dm - Bb - F - C)
         chords = [
             (73.42, 146.83, 174.61, 220.00),
             (58.27, 116.54, 146.83, 174.61),
@@ -302,8 +304,7 @@ def _generate_cinematic_bed(work_dir: Path, niche_id: str = "gta_vi") -> Path:
             + 0.08 * math.sin(two_pi * (n3 * 2.0) * t)
         ) * sidechain
 
-        bass_env = math.exp(-half_frac * 4.8)
-        bass = 0.36 * math.sin(two_pi * bass_f * t) * (0.42 + 0.58 * bass_env)
+        bass = 0.36 * math.sin(two_pi * bass_f * t) * (0.42 + 0.58 * math.exp(-half_frac * 4.8))
 
         kick = 0.0
         for hit in (0.0, 2.0, 3.5):
@@ -384,34 +385,34 @@ def render_video(
     roteiro: str,
     work_dir: Path,
     config: dict[str, Any],
+    broll_videos: list[Path] | None = None,
+    placar_texto: str = "",
     log_cb: LogCallback | None = None,
     progress_cb: ProgressCallback | None = None,
     stop_event: threading.Event | None = None,
 ) -> tuple[Path, Path]:
     """
-    Renderiza vídeo vertical 1080x1920@30fps de alta retenção:
-    - Cortes rápidos (2.4–3.2s por cena)
-    - Intercala automaticamente trechos em movimento de assets/broll/*.mp4 (se houver!) com fotos de ação
-    - Movimento cinético (punch zoom-in/out + pan lateral) e transições rápidas xfade (0.18s)
-    - Legendas .ass centralizadas estilo viral + trilha de fundo + marca d'água por nicho
+    Renderiza vídeo vertical 1080x1920@30fps:
+    - Quando `broll_videos` está disponível: monta 100% EM VÍDEO REAL HD EM MOVIMENTO
+      com enquadramento limpo 1080x1080 nítido (1:1 nativo, ZERO zoom excessivo, ZERO cortes
+      bruscos em jogadores/personagens) sobre fundo atmosférico borrado em movimento!
+    - Sem vídeos B-Roll: usa fotos HD com movimento super suave (1.00 -> 1.04) no mesmo enquadramento limpo.
+    - Queima banner superior opcional (acima do viewport), placar opcional (abaixo) e legendas .ass.
     """
-    if not image_paths:
-        raise ValueError("Lista de imagens vazia para renderização.")
-
     video_cfg = config.get("video", {})
     width = int(video_cfg.get("largura", 1080))
     height = int(video_cfg.get("altura", 1920))
     fps = int(video_cfg.get("fps", 30))
-    trans_dur = float(video_cfg.get("duracao_transicao", 0.18))
-    usar_banner_topo = bool(video_cfg.get("usar_banner_topo", False))
-    banner_dur = float(video_cfg.get("duracao_banner_segundos", 2.5))
+    trans_dur = min(float(video_cfg.get("duracao_transicao", 0.18)), 0.30)
+    usar_banner_topo = bool(video_cfg.get("usar_banner_topo", True))
+    banner_dur = float(video_cfg.get("duracao_banner_segundos", 3.0))
     intro_max_dur = float(video_cfg.get("duracao_intro_segundos", 4.5))
-    music_vol = float(video_cfg.get("volume_musica", 0.18))
+    music_vol = float(video_cfg.get("volume_musica", 0.20))
     usar_musica = bool(video_cfg.get("usar_musica", True))
     usar_intro = bool(video_cfg.get("usar_intro", True))
-    usar_broll = bool(video_cfg.get("usar_broll", True))
+    target_scenes = max(12, min(22, int(video_cfg.get("num_cenas_alvo", 18))))
 
-    niche_id = str(config.get("nicho_ativo", "futebol_mexicano"))
+    niche_id = str(config.get("nicho_ativo", "gta_vi"))
     niche_name = str(config.get("nicho_nome", "Fábrica TK"))
     paths_dict = config.get("paths") or {}
 
@@ -419,7 +420,6 @@ def render_video(
     music_dirs = [Path(paths_dict["music_dir"]), MUSIC_DIR] if paths_dict.get("music_dir") else [MUSIC_DIR]
     intro_dirs = [Path(paths_dict["intros_dir"]), INTROS_DIR] if paths_dict.get("intros_dir") else [INTROS_DIR]
     brand_dirs = [Path(paths_dict["branding_dir"]), BRANDING_DIR] if paths_dict.get("branding_dir") else [BRANDING_DIR]
-    broll_dir = Path(paths_dict["broll_dir"]) if paths_dict.get("broll_dir") else (work_dir / "_no_broll")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -438,7 +438,7 @@ def render_video(
                 intro_dur = min(intro_max_dur, probed, max(2.0, total_target_dur * 0.22))
                 _log(log_cb, f"[VideoEngine] Intro selecionada: {intro_path.name} ({intro_dur:.1f}s)")
 
-    # 2) Música de fundo (do nicho -> raiz -> batida sintetizada do nicho)
+    # 2) Trilha musical
     music_path: Path | None = None
     if usar_musica:
         music_path = _pick_random_asset(music_dirs, (".mp3", ".wav", ".m4a", ".ogg"))
@@ -448,60 +448,64 @@ def render_video(
             music_path = _generate_cinematic_bed(work_dir, niche_id=niche_id)
             _log(
                 log_cb,
-                f"[VideoEngine] Usando trilha pulsante embutida do nicho '{niche_id}' (vol {int(music_vol * 100)}%).",
+                f"[VideoEngine] Trilha pulsante do nicho '{niche_id}' ativada (vol {int(music_vol * 100)}%).",
             )
 
     # 3) Marca d'água opcional
     branding_path = _pick_random_asset(brand_dirs, (".png",))
     if branding_path:
-        _log(log_cb, f"[VideoEngine] Marca d'água detectada: {branding_path.name}")
+        _log(log_cb, f"[VideoEngine] Marca d'água: {branding_path.name}")
 
-    # 4) Banner opcional
+    # 4) Banner superior limpo (posicionado acima do viewport 1080x1080)
     banner_png: Path | None = None
-    if usar_banner_topo:
+    if usar_banner_topo and gancho_tela:
         banner_png = work_dir / "hook_banner.png"
+        accent = (255, 46, 209) if niche_id == "gta_vi" else (250, 204, 21)
         create_hook_banner_png(
             hook_text=gancho_tela,
             output_path=banner_png,
             club_label=niche_name,
+            accent_rgb=accent,
             width=width,
             height=height,
         )
 
-    # 5) Calcula ritmo rápido de cenas (~2.5–3.2s por cena) e intercala B-Roll em vídeo se existir
-    trans_dur = min(trans_dur, 0.35)
-    num_slots = len(image_paths)
+    # 5) Placar opcional no rodapé (para crônicas de jogo)
+    scoreboard_png: Path | None = None
+    if placar_texto and placar_texto.strip():
+        scoreboard_png = work_dir / "scoreboard.png"
+        create_scoreboard_png(placar_texto.strip(), scoreboard_png, width=width, height=height)
+        _log(log_cb, f"[VideoEngine] Placar em tela: '{placar_texto.strip()}'")
+
+    # 6) Monta lista de cenas (prioridade 100% VÍDEO REAL HD -> fallback fotos HD)
+    scenes: list[dict[str, Any]] = []
+    video_list = list(broll_videos or [])
+    num_slots = target_scenes if video_list else len(image_paths)
+    if num_slots <= 0:
+        raise ValueError("Nenhuma cena (vídeo ou imagem) disponível para renderização.")
+
     num_segments = num_slots + (1 if intro_path else 0)
     raw_seg_dur = (total_target_dur - intro_dur + (num_segments - 1) * trans_dur) / num_slots
-    seg_frames = max(int(round(max(1.8, raw_seg_dur) * fps)), int(round((trans_dur + 0.8) * fps)))
+    seg_frames = max(int(round(max(2.0, raw_seg_dur) * fps)), int(round((trans_dur + 0.9) * fps)))
     seg_dur = seg_frames / float(fps)
 
-    # Coleta fatias de B-Roll (.mp4) se houver arquivos na pasta assets/broll/ do nicho
-    broll_slices: list[tuple[Path, float]] = []
-    if usar_broll:
-        broll_slices = _collect_broll_slices(broll_dir, clip_dur=seg_dur + 0.15, max_slices=num_slots // 2 + 2)
-        if broll_slices:
-            _log(
-                log_cb,
-                f"[VideoEngine] B-Roll detectado! Intercalando {len(broll_slices)} cenas em vídeo real com fotos de ação.",
-            )
+    if video_list:
+        slices = build_video_scene_slices(video_list, num_scenes=num_slots, scene_dur=seg_dur + 0.15)
+        for vf, v_start, vw, vh in slices:
+            scenes.append({"type": "video", "path": vf, "start": v_start, "w": vw, "h": vh})
+        _log(
+            log_cb,
+            f"[VideoEngine] MODO 100% VÍDEO REAL HD: {len(scenes)} cenas em movimento "
+            f"({seg_dur:.2f}s cada, enquadramento 1:1 nítido sem zoom excessivo)!",
+        )
 
-    # Monta timeline de cenas: intercala B-Roll nas posições ímpares (ou pares) mantendo fotos da pauta
-    scenes: list[dict[str, Any]] = []
-    broll_cursor = 0
-    for idx, img_p in enumerate(image_paths):
-        if broll_slices and (idx % 2 == 1) and broll_cursor < len(broll_slices):
-            v_file, v_start = broll_slices[broll_cursor]
-            broll_cursor += 1
-            scenes.append({"type": "video", "path": v_file, "start": v_start})
-        else:
+    if not scenes:
+        for img_p in image_paths:
             scenes.append({"type": "image", "path": img_p})
-
-    _log(
-        log_cb,
-        f"[VideoEngine] Compondo {num_segments} cenas rápidas "
-        f"({seg_dur:.2f}s cada, transição {trans_dur:.2f}s, duração alvo {total_target_dur:.1f}s)...",
-    )
+        _log(
+            log_cb,
+            f"[VideoEngine] Modo fotos HD: {len(scenes)} cenas ({seg_dur:.2f}s cada, zoom suave 4%).",
+        )
 
     # Entradas FFmpeg
     inputs: list[str] = []
@@ -516,7 +520,7 @@ def render_video(
     scene_entries: list[tuple[int, dict[str, Any]]] = []
     for sc in scenes:
         if sc["type"] == "video":
-            inputs.extend(["-ss", f"{sc['start']:.2f}", "-t", f"{seg_dur + 0.25:.2f}", "-i", str(sc["path"])])
+            inputs.extend(["-ss", f"{sc['start']:.2f}", "-t", f"{seg_dur + 0.30:.2f}", "-i", str(sc["path"])])
         else:
             inputs.extend(["-i", str(sc["path"])])
         scene_entries.append((idx_counter, sc))
@@ -526,6 +530,12 @@ def render_video(
     if banner_png is not None:
         inputs.extend(["-loop", "1", "-t", f"{banner_dur + 0.5:.2f}", "-i", str(banner_png)])
         banner_idx = idx_counter
+        idx_counter += 1
+
+    scoreboard_idx: int | None = None
+    if scoreboard_png is not None:
+        inputs.extend(["-i", str(scoreboard_png)])
+        scoreboard_idx = idx_counter
         idx_counter += 1
 
     branding_idx: int | None = None
@@ -552,49 +562,59 @@ def render_video(
         filter_lines.append(
             f"[{intro_idx}:v]"
             f"trim=start=0:duration={intro_dur:.3f},setpts=PTS-STARTPTS,"
-            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
             f"crop={width}:{height},"
             f"fps={fps},settb=AVTB,format=yuv420p,setsar=1[seg_intro]"
         )
         segment_labels.append(("seg_intro", intro_dur))
 
-    up_w = int(round(width * 1.28))
-    up_h = int(round(height * 1.28))
+    # Posição do viewport HD 1080x1080 no canvas 1080x1920 (y=360..1440)
+    vp_y = 360
     denom = max(1, seg_frames - 1)
 
     for i, (in_idx, sc) in enumerate(scene_entries):
         label = f"seg_{i:02d}"
         if sc["type"] == "video":
-            filter_lines.append(
-                f"[{in_idx}:v]"
-                f"trim=start=0:duration={seg_dur:.3f},setpts=PTS-STARTPTS,"
-                f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-                f"crop={width}:{height},"
-                f"fps={fps},settb=AVTB,format=yuv420p,setsar=1[{label}]"
-            )
-        else:
-            motion = i % 4
-            if motion == 0:
-                z_expr = f"1.0+0.18*(on/{denom})"
-                x_expr = "iw/2-(iw/zoom/2)"
-                y_expr = "ih/2-(ih/zoom/2)"
-            elif motion == 1:
-                z_expr = f"1.14+0.05*(on/{denom})"
-                x_expr = f"(iw-iw/zoom)*(0.20+0.60*(on/{denom}))"
-                y_expr = "ih/2-(ih/zoom/2)"
-            elif motion == 2:
-                z_expr = f"1.18-0.18*(on/{denom})"
-                x_expr = "iw/2-(iw/zoom/2)"
-                y_expr = "ih/2-(ih/zoom/2)"
+            vw = int(sc.get("w", 1920))
+            vh = int(sc.get("h", 1080))
+            if vh > vw:
+                # Clipe já é vertical 9:16 -> tela cheia direta
+                filter_lines.append(
+                    f"[{in_idx}:v]"
+                    f"trim=start=0:duration={seg_dur:.3f},setpts=PTS-STARTPTS,"
+                    f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
+                    f"crop={width}:{height},"
+                    f"fps={fps},settb=AVTB,format=yuv420p,setsar=1[{label}]"
+                )
             else:
-                z_expr = f"1.14+0.05*(on/{denom})"
-                x_expr = f"(iw-iw/zoom)*(0.80-0.60*(on/{denom}))"
-                y_expr = "ih/2-(ih/zoom/2)"
-
+                # Clipe 16:9 HD -> fundo atmosférico borrado rápido + viewport 1080x1080 nítido (1:1 nativo!)
+                filter_lines.append(
+                    f"[{in_idx}:v]"
+                    f"trim=start=0:duration={seg_dur:.3f},setpts=PTS-STARTPTS,"
+                    f"fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw_{i}][fraw_{i}]"
+                )
+                filter_lines.append(
+                    f"[braw_{i}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
+                    f"boxblur=8:2,scale={width}:{height}:flags=bilinear,"
+                    f"eq=brightness=-0.32:saturation=1.18[bg_{i}]"
+                )
+                filter_lines.append(
+                    f"[fraw_{i}]scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
+                    f"crop={width}:{width},eq=contrast=1.05:saturation=1.08[fg_{i}]"
+                )
+                filter_lines.append(
+                    f"[bg_{i}][fg_{i}]overlay=0:{vp_y},"
+                    f"drawbox=x=0:y={vp_y - 3}:w={width}:h=3:color=white@0.28:t=fill,"
+                    f"drawbox=x=0:y={vp_y + width}:w={width}:h=3:color=white@0.28:t=fill,"
+                    f"format=yuv420p,setsar=1[{label}]"
+                )
+        else:
+            # Fallback foto HD: zoom ultra-suave (apenas 4%, sem distorção!)
+            z_expr = f"1.0+0.04*(on/{denom})" if i % 2 == 0 else f"1.04-0.04*(on/{denom})"
             filter_lines.append(
                 f"[{in_idx}:v]"
-                f"scale={up_w}:{up_h}:flags=lanczos,"
-                f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
+                f"scale=1140:2026:flags=lanczos,"
+                f"zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
                 f"d={seg_frames}:s={width}x{height}:fps={fps},"
                 f"setpts=PTS-STARTPTS,settb=AVTB,fps={fps},format=yuv420p,setsar=1[{label}]"
             )
@@ -617,22 +637,20 @@ def render_video(
             current_v = out_label
             cum_dur = offset + next_dur
 
-    # Vinheta + contraste vibrante
-    filter_lines.append(
-        f"[{current_v}]vignette=PI/4.8,eq=brightness=-0.03:contrast=1.06:saturation=1.08[v_graded]"
-    )
-    current_v = "v_graded"
-
     if branding_idx is not None:
-        filter_lines.append(f"[{branding_idx}:v]scale=170:-1,format=rgba,colorchannelmixer=aa=0.78[wm]")
-        filter_lines.append(f"[{current_v}][wm]overlay=W-w-36:96[v_wm]")
+        filter_lines.append(f"[{branding_idx}:v]scale=160:-1,format=rgba,colorchannelmixer=aa=0.80[wm]")
+        filter_lines.append(f"[{current_v}][wm]overlay=W-w-36:48[v_wm]")
         current_v = "v_wm"
+
+    if scoreboard_idx is not None:
+        filter_lines.append(f"[{current_v}][{scoreboard_idx}:v]overlay=0:0[v_score]")
+        current_v = "v_score"
 
     if banner_idx is not None:
         fade_out_start = max(0.3, banner_dur - 0.30)
         filter_lines.append(
             f"[{banner_idx}:v]format=rgba,"
-            f"fade=t=in:st=0:d=0.22:alpha=1,"
+            f"fade=t=in:st=0:d=0.20:alpha=1,"
             f"fade=t=out:st={fade_out_start:.2f}:d=0.30:alpha=1[banner]"
         )
         filter_lines.append(
@@ -771,6 +789,6 @@ def render_video(
     size_mb = output_mp4.stat().st_size / (1024 * 1024)
     _log(
         log_cb,
-        f"[VideoEngine] Vídeo concluído! {output_mp4.name} ({size_mb:.1f} MB) + {output_txt.name}",
+        f"[VideoEngine] Vídeo HD concluído! {output_mp4.name} ({size_mb:.1f} MB) + {output_txt.name}",
     )
     return output_mp4, output_txt

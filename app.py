@@ -303,7 +303,29 @@ class FabricaTKApp(ctk.CTk):
         self.batch_seg.set("1")
         self.batch_seg.grid(row=13, column=0, sticky="ew", padx=6, pady=(2, 12))
 
-        # 6. Switches
+        # 6. Opções avançadas opcionais (100% automático se deixar em branco!)
+        self._section_label(controls, "LINK YOUTUBE / PLACAR (OPCIONAL • VAZIO = AUTO)", row=14)
+        self.custom_video_entry = ctk.CTkEntry(
+            controls,
+            placeholder_text="URL YouTube (ou deixe vazio p/ baixar sozinho)",
+            fg_color=BG_INPUT,
+            border_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=32,
+        )
+        self.custom_video_entry.grid(row=15, column=0, sticky="ew", padx=6, pady=(2, 6))
+
+        self.placar_entry = ctk.CTkEntry(
+            controls,
+            placeholder_text="Placar opcional (ex: AMÉRICA 3 x 2 BARCELONA)",
+            fg_color=BG_INPUT,
+            border_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=32,
+        )
+        self.placar_entry.grid(row=16, column=0, sticky="ew", padx=6, pady=(0, 10))
+
+        # 7. Switches
         switch_card = ctk.CTkFrame(
             controls,
             fg_color=BG_CARD,
@@ -311,7 +333,7 @@ class FabricaTKApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        switch_card.grid(row=14, column=0, sticky="ew", padx=6, pady=(2, 6))
+        switch_card.grid(row=17, column=0, sticky="ew", padx=6, pady=(2, 6))
         switch_card.grid_columnconfigure(0, weight=1)
 
         video_cfg = self.global_cfg.get("video", {})
@@ -330,7 +352,7 @@ class FabricaTKApp(ctk.CTk):
         self.broll_var = ctk.BooleanVar(value=bool(video_cfg.get("usar_broll", True)))
         self.broll_switch = ctk.CTkSwitch(
             switch_card,
-            text="Usar clipes B-Roll em vídeo (assets/broll)",
+            text="Vídeo real HD automático (yt-dlp / broll)",
             variable=self.broll_var,
             progress_color=ACCENT_CYAN_DARK,
             button_color=ACCENT_CYAN,
@@ -666,6 +688,8 @@ class FabricaTKApp(ctk.CTk):
             self._append_log(f"Aviso ao salvar configurações: {exc}")
 
         self.runtime_cfg = build_runtime_config(self.global_cfg, self.active_niche_id)
+        self.runtime_cfg["video_url_opcional"] = self.custom_video_entry.get().strip()
+        self.runtime_cfg["placar_opcional"] = self.placar_entry.get().strip()
         return self.runtime_cfg
 
     def _on_batch_changed(self, val: str) -> None:
@@ -762,6 +786,8 @@ class FabricaTKApp(ctk.CTk):
             self.model_combo,
             self.refresh_models_btn,
             self.batch_seg,
+            self.custom_video_entry,
+            self.placar_entry,
             self.music_switch,
             self.broll_switch,
             self.intro_switch,

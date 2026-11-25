@@ -24,12 +24,14 @@ REQUIRED_MODULES = [
     ("edge-tts", "edge_tts"),
     ("Pillow", "PIL"),
     ("ddgs", "ddgs"),
+    ("yt-dlp", "yt_dlp"),
 ]
 
 INTERNAL_MODULES = [
     "src.scraper",
     "src.scriptwriter",
     "src.media_fetcher",
+    "src.video_fetcher",
     "src.tts_subtitles",
     "src.video_engine",
     "src.pipeline",
