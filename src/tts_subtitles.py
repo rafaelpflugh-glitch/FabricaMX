@@ -252,15 +252,16 @@ def build_tiktok_ass(
     play_x = int(video_cfg.get("largura", 1080))
     play_y = int(video_cfg.get("altura", 1920))
 
-    font_name = sub_cfg.get("fonte", "Arial Black")
-    font_size = int(sub_cfg.get("tamanho_fonte", 68))
-    active_ass = hex_to_ass_color(sub_cfg.get("cor_ativa", "#FACC15"))
+    font_name = sub_cfg.get("fonte", "Impact")
+    font_size = int(sub_cfg.get("tamanho_fonte", 88))
+    active_ass = hex_to_ass_color(sub_cfg.get("cor_ativa", "#00F0FF"))
     inactive_ass = hex_to_ass_color(sub_cfg.get("cor_inativa", "#FFFFFF"))
     outline_ass = hex_to_ass_color(sub_cfg.get("cor_contorno", "#000000"))
-    outline_size = int(sub_cfg.get("espessura_contorno", 6))
-    shadow_size = int(sub_cfg.get("sombra", 4))
+    outline_size = int(sub_cfg.get("espessura_contorno", 11))
+    shadow_size = int(sub_cfg.get("sombra", 3))
     words_per_block = int(sub_cfg.get("palavras_por_bloco", 3))
-    margin_v = int(sub_cfg.get("margem_inferior", 340))
+    alignment = int(sub_cfg.get("alinhamento", 5))
+    margin_v = int(sub_cfg.get("margem_inferior", 0))
 
     header = f"""[Script Info]
 Title: FabricaMX TikTok Subtitles
@@ -272,13 +273,13 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: TikTok,{font_name},{font_size},{inactive_ass},{active_ass},{outline_ass},&H80000000&,-1,0,0,0,100,100,1,0,1,{outline_size},{shadow_size},2,70,70,{margin_v},1
+Style: TikTok,{font_name},{font_size},{inactive_ass},{active_ass},{outline_ass},&H90000000&,-1,0,0,0,100,100,1,0,1,{outline_size},{shadow_size},{alignment},70,70,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
-    blocks = _group_words_into_blocks(words, max_words=words_per_block)
+    blocks = _group_words_into_blocks(words, max_words=words_per_block, max_chars=20)
     events: list[str] = []
 
     for b_idx, block in enumerate(blocks):
@@ -297,13 +298,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if seg_end <= seg_start:
                 seg_end = seg_start + 0.08
 
-            # Monta texto destacando a palavra ativa (amarelo + leve zoom) e demais em branco
+            # Monta texto destacando a palavra ativa (ciano elétrico + leve pop) e demais em branco
             parts: list[str] = []
             for j, item in enumerate(block):
                 clean_word = _escape_ass_text(item.text.upper())
                 if j == w_idx:
                     parts.append(
-                        f"{{\\c{active_ass}\\fscx108\\fscy108}}{clean_word}{{\\c{inactive_ass}\\fscx100\\fscy100}}"
+                        f"{{\\c{active_ass}\\fscx110\\fscy110}}{clean_word}{{\\c{inactive_ass}\\fscx100\\fscy100}}"
                     )
                 else:
                     parts.append(f"{{\\c{inactive_ass}}}{clean_word}")

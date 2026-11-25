@@ -45,6 +45,12 @@ CLUB_OPTIONS = [
     "Liga MX Geral",
 ]
 
+MODE_LABELS = {
+    "noticia": "Notícia Viral (Liga MX)",
+    "top5": "Top 5 Viral (@yaguilas1)",
+}
+LABEL_TO_MODE = {v: k for k, v in MODE_LABELS.items()}
+
 PIPELINE_STEPS = [
     "1/5 Notícia",
     "2/5 Roteiro",
@@ -138,8 +144,25 @@ class FabricaMXApp(ctk.CTk):
         controls.grid(row=1, column=0, sticky="nsew", padx=10, pady=2)
         controls.grid_columnconfigure(0, weight=1)
 
+        # 0. Modo de Conteúdo (Notícia Viral vs Top 5 estilo @yaguilas1)
+        self._section_label(controls, "MODO DE CONTEÚDO", row=0)
+        self.mode_var = ctk.StringVar(value=MODE_LABELS["noticia"])
+        self.mode_menu = ctk.CTkOptionMenu(
+            controls,
+            values=list(MODE_LABELS.values()),
+            variable=self.mode_var,
+            fg_color=BG_INPUT,
+            button_color=ACCENT_YELLOW,
+            button_hover_color=ACCENT_YELLOW_HOVER,
+            dropdown_fg_color=BG_CARD,
+            dropdown_hover_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=34,
+        )
+        self.mode_menu.grid(row=1, column=0, sticky="ew", padx=6, pady=(2, 8))
+
         # 1. Clube / Nicho
-        self._section_label(controls, "CLUBE / NICHO", row=0)
+        self._section_label(controls, "CLUBE / NICHO", row=2)
         self.club_var = ctk.StringVar(value="Club América")
         self.club_menu = ctk.CTkOptionMenu(
             controls,
@@ -154,10 +177,10 @@ class FabricaMXApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             height=34,
         )
-        self.club_menu.grid(row=1, column=0, sticky="ew", padx=6, pady=(2, 8))
+        self.club_menu.grid(row=3, column=0, sticky="ew", padx=6, pady=(2, 8))
 
         # Palavras-chave
-        self._section_label(controls, "PALAVRAS-CHAVE (SEPARADAS POR VÍRGULA)", row=2)
+        self._section_label(controls, "PALAVRAS-CHAVE (SEPARADAS POR VÍRGULA)", row=4)
         self.keywords_entry = ctk.CTkEntry(
             controls,
             placeholder_text="Club América, Águilas, Coapa, Liga MX",
@@ -166,10 +189,10 @@ class FabricaMXApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             height=34,
         )
-        self.keywords_entry.grid(row=3, column=0, sticky="ew", padx=6, pady=(2, 10))
+        self.keywords_entry.grid(row=5, column=0, sticky="ew", padx=6, pady=(2, 10))
 
         # 2. Voz Edge-TTS
-        self._section_label(controls, "VOZ DE NARRAÇÃO (EDGE-TTS)", row=4)
+        self._section_label(controls, "VOZ DE NARRAÇÃO (EDGE-TTS)", row=6)
         self.voice_var = ctk.StringVar(value=VOICES[0])
         self.voice_menu = ctk.CTkOptionMenu(
             controls,
@@ -183,18 +206,18 @@ class FabricaMXApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             height=34,
         )
-        self.voice_menu.grid(row=5, column=0, sticky="ew", padx=6, pady=(2, 10))
+        self.voice_menu.grid(row=7, column=0, sticky="ew", padx=6, pady=(2, 10))
 
         # 3. Modelo Ollama + botão Listar Modelos
-        self._section_label(controls, "MODELO OLLAMA LOCAL", row=6)
+        self._section_label(controls, "MODELO OLLAMA LOCAL", row=8)
         ollama_row = ctk.CTkFrame(controls, fg_color="transparent")
-        ollama_row.grid(row=7, column=0, sticky="ew", padx=6, pady=(2, 10))
+        ollama_row.grid(row=9, column=0, sticky="ew", padx=6, pady=(2, 10))
         ollama_row.grid_columnconfigure(0, weight=1)
 
-        self.model_var = ctk.StringVar(value="llama3.1:latest")
+        self.model_var = ctk.StringVar(value="qwen2.5:7b")
         self.model_combo = ctk.CTkComboBox(
             ollama_row,
-            values=["llama3.1:latest"],
+            values=["qwen2.5:7b"],
             variable=self.model_var,
             fg_color=BG_INPUT,
             border_color=BORDER_SUBTLE,
@@ -223,7 +246,7 @@ class FabricaMXApp(ctk.CTk):
 
         # 4. Quantidade de vídeos no lote (1 a 5)
         batch_header = ctk.CTkFrame(controls, fg_color="transparent")
-        batch_header.grid(row=8, column=0, sticky="ew", padx=6, pady=(4, 2))
+        batch_header.grid(row=10, column=0, sticky="ew", padx=6, pady=(4, 2))
         ctk.CTkLabel(
             batch_header,
             text="VÍDEOS NO LOTE",
@@ -251,7 +274,7 @@ class FabricaMXApp(ctk.CTk):
             height=32,
         )
         self.batch_seg.set("1")
-        self.batch_seg.grid(row=9, column=0, sticky="ew", padx=6, pady=(2, 12))
+        self.batch_seg.grid(row=11, column=0, sticky="ew", padx=6, pady=(2, 12))
 
         # 5. Switches
         switch_card = ctk.CTkFrame(
@@ -261,7 +284,7 @@ class FabricaMXApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        switch_card.grid(row=10, column=0, sticky="ew", padx=6, pady=(2, 6))
+        switch_card.grid(row=12, column=0, sticky="ew", padx=6, pady=(2, 6))
         switch_card.grid_columnconfigure(0, weight=1)
 
         self.music_var = ctk.BooleanVar(value=True)
@@ -512,6 +535,9 @@ class FabricaMXApp(ctk.CTk):
         ).grid(row=row, column=0, sticky="w", padx=6, pady=(4, 0))
 
     def _load_values_from_config(self) -> None:
+        modo = str(self.config_data.get("modo_conteudo", "noticia")).strip().lower()
+        self.mode_var.set(MODE_LABELS.get(modo, MODE_LABELS["noticia"]))
+
         club = self.config_data.get("clube_foco", "Club América")
         if club in CLUB_OPTIONS:
             self.club_var.set(club)
@@ -523,7 +549,7 @@ class FabricaMXApp(ctk.CTk):
         if voice in VOICES:
             self.voice_var.set(voice)
 
-        model = self.config_data.get("ollama_modelo", "llama3.1:latest")
+        model = self.config_data.get("ollama_modelo", "qwen2.5:7b")
         self.model_var.set(model)
         self.model_combo.configure(values=[model])
 
@@ -534,11 +560,12 @@ class FabricaMXApp(ctk.CTk):
 
     def _collect_config_from_ui(self) -> dict[str, Any]:
         cfg = dict(self.config_data)
+        cfg["modo_conteudo"] = LABEL_TO_MODE.get(self.mode_var.get(), "noticia")
         cfg["clube_foco"] = self.club_var.get().strip() or "Club América"
         raw_kw = self.keywords_entry.get()
         cfg["palavras_chave"] = [k.strip() for k in raw_kw.split(",") if k.strip()]
         cfg["tts_voz"] = self.voice_var.get().strip() or VOICES[0]
-        cfg["ollama_modelo"] = self.model_var.get().strip() or "llama3.1:latest"
+        cfg["ollama_modelo"] = self.model_var.get().strip() or "qwen2.5:7b"
 
         video_cfg = dict(cfg.get("video", {}))
         video_cfg["usar_musica"] = bool(self.music_var.get())
@@ -646,6 +673,7 @@ class FabricaMXApp(ctk.CTk):
         self.is_running = running
         state = "disabled" if running else "normal"
         for widget in (
+            self.mode_menu,
             self.club_menu,
             self.keywords_entry,
             self.voice_menu,

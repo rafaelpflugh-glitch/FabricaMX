@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
+import struct
 import subprocess
 import threading
+import wave
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -19,13 +22,13 @@ LogCallback = Callable[[str], None]
 ProgressCallback = Callable[[float], None]
 
 XFADE_TRANSITIONS = [
-    "fade",
-    "wipeleft",
+    "fadefast",
     "hblur",
-    "wiperight",
-    "smoothleft",
-    "dissolve",
+    "wipeleft",
     "smoothright",
+    "wiperight",
+    "fadeblack",
+    "smoothleft",
     "slideleft",
     "slideright",
 ]
@@ -242,6 +245,87 @@ def _pick_random_asset(folder: Path, extensions: tuple[str, ...]) -> Path | None
     return random.choice(candidates)
 
 
+def _generate_cinematic_sports_bed(work_dir: Path) -> Path:
+    """
+    Gera uma trilha instrumental épica/esportiva livre de direitos autorais (Dm - Bb - F - C a 112 BPM)
+    como fallback caso a pasta assets/music/ ainda esteja vazia, evitando vídeos mudos e sem alma.
+    """
+    wav_path = work_dir / "auto_sports_bed.wav"
+    sr = 22050
+    bpm = 112.0
+    beat_dur = 60.0 / bpm
+    # 16 batidas (~8.57s) em loop perfeito (4 compassos: Dm, Bb, F, C)
+    total_beats = 16
+    duration = total_beats * beat_dur
+    num_samples = int(sr * duration)
+
+    chords = [
+        (73.42, 146.83, 174.61, 220.00),  # Dm (D2, D3, F3, A3)
+        (58.27, 116.54, 146.83, 174.61),  # Bb (Bb1, Bb2, D3, F3)
+        (87.31, 174.61, 220.00, 261.63),  # F  (F2, F3, A3, C4)
+        (65.41, 130.81, 164.81, 196.00),  # C  (C2, C3, E3, G3)
+    ]
+
+    two_pi = 2.0 * math.pi
+    buf = bytearray(num_samples * 2)
+
+    for n in range(num_samples):
+        t = n / sr
+        beat_pos = t / beat_dur
+        bar_idx = int(beat_pos // 4) % 4
+        beat_in_bar = beat_pos % 4.0
+        beat_frac = beat_pos % 1.0
+        half_frac = (beat_pos * 2.0) % 1.0
+
+        bass_f, n1, n2, n3 = chords[bar_idx]
+
+        # Pad cinematográfico suave com leve respiração sidechain no tempo do bumbo
+        sidechain = 0.45 + 0.55 * min(1.0, beat_frac * 3.2)
+        pad = (
+            0.22 * math.sin(two_pi * n1 * t)
+            + 0.16 * math.sin(two_pi * n2 * t)
+            + 0.14 * math.sin(two_pi * n3 * t)
+            + 0.08 * math.sin(two_pi * (n3 * 2.0) * t)
+        ) * sidechain
+
+        # Sub-bass pulsante em colcheias (estilo batida esportiva moderna)
+        bass_env = math.exp(-half_frac * 4.5)
+        bass = 0.34 * math.sin(two_pi * bass_f * t) * (0.45 + 0.55 * bass_env)
+
+        # Bumbo profundo nos tempos 1 e 3 (e contratempo 3.5)
+        kick = 0.0
+        for hit in (0.0, 2.0, 3.5):
+            dt = beat_in_bar - hit
+            if 0.0 <= dt < 0.25:
+                k_t = dt * beat_dur
+                k_freq = 48.0 + 95.0 * math.exp(-k_t * 32.0)
+                kick += 0.42 * math.sin(two_pi * k_freq * k_t) * math.exp(-k_t * 16.0)
+
+        # Pulso sutil de arpejo/tensão em semicolcheias
+        arp_step = int(beat_pos * 2) % 3
+        arp_freq = (n1, n2, n3)[arp_step] * 2.0
+        arp_env = math.exp(-half_frac * 7.0)
+        arp = 0.09 * math.sin(two_pi * arp_freq * t) * arp_env
+
+        # Envelope suave nas extremidades para loop sem estalo
+        edge = 1.0
+        if n < 300:
+            edge = n / 300.0
+        elif n > num_samples - 300:
+            edge = (num_samples - n) / 300.0
+
+        sample = max(-0.92, min(0.92, (pad + bass + kick + arp) * 0.85 * edge))
+        struct.pack_into("<h", buf, n * 2, int(sample * 32767))
+
+    with wave.open(str(wav_path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(buf)
+
+    return wav_path
+
+
 def _parse_ffmpeg_time(line: str) -> float | None:
     match = re.search(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)", line)
     if not match:
@@ -315,10 +399,11 @@ def render_video(
     width = int(video_cfg.get("largura", 1080))
     height = int(video_cfg.get("altura", 1920))
     fps = int(video_cfg.get("fps", 30))
-    trans_dur = float(video_cfg.get("duracao_transicao", 0.35))
-    banner_dur = float(video_cfg.get("duracao_banner_segundos", 3.0))
+    trans_dur = float(video_cfg.get("duracao_transicao", 0.25))
+    usar_banner_topo = bool(video_cfg.get("usar_banner_topo", False))
+    banner_dur = float(video_cfg.get("duracao_banner_segundos", 2.8))
     intro_max_dur = float(video_cfg.get("duracao_intro_segundos", 5.0))
-    music_vol = float(video_cfg.get("volume_musica", 0.10))
+    music_vol = float(video_cfg.get("volume_musica", 0.18))
     usar_musica = bool(video_cfg.get("usar_musica", True))
     usar_intro = bool(video_cfg.get("usar_intro", True))
     club_focus = str(config.get("clube_foco", "LIGA MX"))
@@ -346,21 +431,27 @@ def render_video(
         if music_path:
             _log(log_cb, f"[VideoEngine] Trilha de fundo: {music_path.name} (vol {int(music_vol * 100)}%)")
         else:
-            _log(log_cb, "[VideoEngine] Nenhuma trilha em assets/music/. Renderizando só com narração.")
+            music_path = _generate_cinematic_sports_bed(work_dir)
+            _log(
+                log_cb,
+                f"[VideoEngine] Pasta assets/music/ vazia — usando batida esportiva embutida (vol {int(music_vol * 100)}%).",
+            )
 
     branding_path = _pick_random_asset(BRANDING_DIR, (".png",))
     if branding_path:
         _log(log_cb, f"[VideoEngine] Marca d'água detectada: {branding_path.name}")
 
-    # Gera PNG do banner gancho_tela
-    banner_png = work_dir / "hook_banner.png"
-    create_hook_banner_png(
-        hook_text=gancho_tela,
-        output_path=banner_png,
-        club_label=club_focus,
-        width=width,
-        height=height,
-    )
+    # Gera PNG do banner gancho_tela apenas se ativado
+    banner_png: Path | None = None
+    if usar_banner_topo:
+        banner_png = work_dir / "hook_banner.png"
+        create_hook_banner_png(
+            hook_text=gancho_tela,
+            output_path=banner_png,
+            club_label=club_focus,
+            width=width,
+            height=height,
+        )
 
     # Calcula duração de cada imagem para sincronizar exatamente com a duração do áudio
     num_images = len(image_paths)
@@ -393,10 +484,12 @@ def render_video(
         img_indices.append(idx_counter)
         idx_counter += 1
 
-    # Banner PNG em loop curto para permitir fade in/out suave
-    inputs.extend(["-loop", "1", "-t", f"{banner_dur + 0.5:.2f}", "-i", str(banner_png)])
-    banner_idx = idx_counter
-    idx_counter += 1
+    # Banner PNG opcional em loop curto
+    banner_idx: int | None = None
+    if banner_png is not None:
+        inputs.extend(["-loop", "1", "-t", f"{banner_dur + 0.5:.2f}", "-i", str(banner_png)])
+        banner_idx = idx_counter
+        idx_counter += 1
 
     branding_idx: int | None = None
     if branding_path:
@@ -431,25 +524,39 @@ def render_video(
         )
         segment_labels.append(("seg_intro", intro_dur))
 
-    # 2) Cenas de imagem com zoompan suave alternado (zoom-in / zoom-out)
-    # Pré-escala leve (1.2x) garante movimento suave sem tremulação de arredondamento
-    up_w = int(round(width * 1.2))
-    up_h = int(round(height * 1.2))
+    # 2) Cenas de imagem com movimento cinético variado (Zoom-IN, Pan-Dir+Zoom, Zoom-OUT, Pan-Esq+Zoom)
+    up_w = int(round(width * 1.25))
+    up_h = int(round(height * 1.25))
     denom = max(1, img_frames - 1)
 
     for i, in_idx in enumerate(img_indices):
-        if i % 2 == 0:
-            # Zoom IN suave: 1.00 -> 1.12
-            z_expr = f"1.0+0.12*(on/{denom})"
+        motion = i % 4
+        if motion == 0:
+            # Zoom IN dinâmico: 1.00 -> 1.15
+            z_expr = f"1.0+0.15*(on/{denom})"
+            x_expr = "iw/2-(iw/zoom/2)"
+            y_expr = "ih/2-(ih/zoom/2)"
+        elif motion == 1:
+            # Pan suave para a direita com zoom leve: 1.12 -> 1.16
+            z_expr = f"1.12+0.04*(on/{denom})"
+            x_expr = f"(iw-iw/zoom)*(0.25+0.50*(on/{denom}))"
+            y_expr = "ih/2-(ih/zoom/2)"
+        elif motion == 2:
+            # Zoom OUT dinâmico: 1.15 -> 1.00
+            z_expr = f"1.15-0.15*(on/{denom})"
+            x_expr = "iw/2-(iw/zoom/2)"
+            y_expr = "ih/2-(ih/zoom/2)"
         else:
-            # Zoom OUT suave: 1.12 -> 1.00
-            z_expr = f"1.12-0.12*(on/{denom})"
+            # Pan suave para a esquerda com zoom leve: 1.12 -> 1.16
+            z_expr = f"1.12+0.04*(on/{denom})"
+            x_expr = f"(iw-iw/zoom)*(0.75-0.50*(on/{denom}))"
+            y_expr = "ih/2-(ih/zoom/2)"
 
         label = f"seg_{i:02d}"
         filter_lines.append(
             f"[{in_idx}:v]"
             f"scale={up_w}:{up_h}:flags=bicubic,"
-            f"zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
             f"d={img_frames}:s={width}x{height}:fps={fps},"
             f"setpts=PTS-STARTPTS,settb=AVTB,fps={fps},format=yuv420p,setsar=1[{label}]"
         )
@@ -488,17 +595,18 @@ def render_video(
         )
         current_v = "v_wm"
 
-    # 6) Banner do gancho_tela nos primeiros 3 segundos com fade suave
-    fade_out_start = max(0.3, banner_dur - 0.30)
-    filter_lines.append(
-        f"[{banner_idx}:v]format=rgba,"
-        f"fade=t=in:st=0:d=0.22:alpha=1,"
-        f"fade=t=out:st={fade_out_start:.2f}:d=0.30:alpha=1[banner]"
-    )
-    filter_lines.append(
-        f"[{current_v}][banner]overlay=0:0:eof_action=pass:enable='between(t,0,{banner_dur:.2f})'[v_banner]"
-    )
-    current_v = "v_banner"
+    # 6) Banner opcional do gancho_tela nos primeiros segundos
+    if banner_idx is not None:
+        fade_out_start = max(0.3, banner_dur - 0.30)
+        filter_lines.append(
+            f"[{banner_idx}:v]format=rgba,"
+            f"fade=t=in:st=0:d=0.22:alpha=1,"
+            f"fade=t=out:st={fade_out_start:.2f}:d=0.30:alpha=1[banner]"
+        )
+        filter_lines.append(
+            f"[{current_v}][banner]overlay=0:0:eof_action=pass:enable='between(t,0,{banner_dur:.2f})'[v_banner]"
+        )
+        current_v = "v_banner"
 
     # 7) Legendas .ass queimadas (com escape seguro para Windows)
     escaped_ass = escape_ffmpeg_filter_path(ass_path)

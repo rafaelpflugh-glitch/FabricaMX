@@ -12,7 +12,7 @@ from typing import Any, Callable
 from src import TEMP_DIR, append_history
 from src.media_fetcher import fetch_and_prepare_images
 from src.scraper import NewsArticle, fetch_next_news
-from src.scriptwriter import ScriptPackage, generate_script
+from src.scriptwriter import ScriptPackage, generate_script, pick_next_top5_topic
 from src.tts_subtitles import generate_narration_and_subtitles
 from src.video_engine import render_video
 
@@ -109,15 +109,24 @@ class FabricaPipeline:
         script: ScriptPackage | None = None
 
         try:
-            # Etapa 1/5: Coletando notícia
+            # Etapa 1/5: Coletando notícia ou selecionando tema Top 5 Viral
             self._check_cancelled()
             self._progress(1, f"{prefix}{self.STAGES[0]}", 0.05)
-            self._log(f"{prefix}Iniciando etapa 1/5: Coletando notícia da Liga MX...")
-            article = fetch_next_news(
-                config=self.config,
-                exclude_urls=exclude_urls,
-                log_cb=self._log,
-            )
+            modo = str(self.config.get("modo_conteudo", "noticia")).strip().lower()
+            if modo == "top5":
+                self._log(f"{prefix}Iniciando etapa 1/5: Selecionando tema Top 5 Viral estilo @yaguilas1...")
+                article = pick_next_top5_topic(
+                    club_focus=self.config.get("clube_foco", "Club América"),
+                    exclude_urls=exclude_urls,
+                )
+                self._log(f"{prefix}[Top5] Tema escolhido: {article.title}")
+            else:
+                self._log(f"{prefix}Iniciando etapa 1/5: Coletando notícia quente da Liga MX...")
+                article = fetch_next_news(
+                    config=self.config,
+                    exclude_urls=exclude_urls,
+                    log_cb=self._log,
+                )
             if self.on_preview:
                 self.on_preview(article, None)
             self._progress(1, f"{prefix}{self.STAGES[0]}", 0.18)
