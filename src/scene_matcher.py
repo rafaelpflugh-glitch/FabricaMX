@@ -154,15 +154,22 @@ def index_video_pool(
     work_dir: Path,
     config: dict[str, Any],
     log_cb: LogCallback | None = None,
+    contextual_max_samples: int = 12,
 ) -> list[IndexedScene]:
     """
     Indexa semanticamente os vídeos do pool:
     - Vídeos permanentes da pasta `assets/broll/` são indexados 1 ÚNICA VEZ e salvos em `scene_index.json`!
-    - Vídeos contextuais baixados para esta pauta são indexados rapidamente sob demanda (~10-14 amostras).
+    - Vídeos contextuais baixados para esta pauta são indexados rapidamente sob demanda.
     """
     ollama_url = str(config.get("ollama_url", "http://localhost:11434"))
     niche_id = str(config.get("nicho_ativo", "gta_vi"))
-    niche_hint = "GTA 6 video game" if niche_id == "gta_vi" else "Mexican football soccer match"
+    hint_map = {
+        "gta_vi": "GTA 6 video game (Vice City, Lucia, Jason, cars, action — also explicitly state if a frame shows a different game, logo, sponsor, or talking head)",
+        "musica_gear": "music documentary / famous rock guitarists / electric guitars / guitar pedals on stage or studio (name the guitarist, instrument, or band if visible)",
+        "tv_realities": "Brazilian cooking reality TV show kitchen scene",
+        "futebol_mexicano": "Mexican football Liga MX soccer match stadium players",
+    }
+    niche_hint = hint_map.get(niche_id, str(config.get("nicho_nome", "video clip")))
     paths_dict = config.get("paths") or {}
     broll_dir = Path(paths_dict["broll_dir"]) if paths_dict.get("broll_dir") else work_dir
     cache_path = broll_dir / "scene_index.json"
@@ -268,9 +275,9 @@ def index_video_pool(
             cache[cache_key] = entries_for_cache
             cache_dirty = True
 
-    # Indexa vídeos contextuais primeiro (12 amostras por vídeo contextual)
+    # Indexa vídeos contextuais primeiro
     for vf in contextual_videos:
-        _index_one(vf, is_ctx=True, max_samples=12)
+        _index_one(vf, is_ctx=True, max_samples=contextual_max_samples)
 
     # Indexa biblioteca permanente (até 26 amostras por vídeo -> salvo em cache para sempre!)
     for vf in library_videos:
@@ -412,3 +419,88 @@ Responda APENAS com o JSON:"""
         selected_scenes = _fallback_keyword_match(narration_slots, indexed_scenes)
 
     return [(sc.video_path, sc.start, sc.width, sc.height) for sc in selected_scenes]
+
+
+def match_beats_to_indexed_scenes(
+    beats: list[dict[str, Any]],
+    indexed_scenes: list[IndexedScene],
+    config: dict[str, Any],
+    source_min_t: float = 0.0,
+    log_cb: LogCallback | None = None,
+) -> list[tuple[Path, float, int, int]]:
+    """
+    Casa CADA BEAT da narração (`fala` + `o_que_mostrar` + `timestamp_ref`) diretamente com o frame REAL
+    visto pelo Gemini Vision no vídeo baixado (ou biblioteca oficial do nicho), garantindo coerência visual real!
+    """
+    if not indexed_scenes or not beats:
+        return []
+
+    n_beats = len(beats)
+    catalog_lines: list[str] = []
+    for idx, sc in enumerate(indexed_scenes):
+        if sc.is_contextual:
+            orig_t = sc.start + source_min_t
+            src_tag = f"[VIDEO_FONTE @{orig_t:.0f}s]"
+        else:
+            src_tag = f"[BROLL_OFICIAL {sc.video_path.stem[:18]}]"
+        catalog_lines.append(f"{idx}: {src_tag} {sc.description}")
+
+    beat_lines: list[str] = []
+    for i, b in enumerate(beats):
+        fala = str(b.get("fala") or "").strip()
+        vis = str(b.get("o_que_mostrar") or "").strip()
+        tref = b.get("timestamp_ref")
+        ref_txt = f" (ref ~{int(tref)}s)" if isinstance(tref, (int, float)) else ""
+        beat_lines.append(f"BEAT {i}{ref_txt}: FALA=\"{fala}\" | VISUAL_DESEJADO=\"{vis}\"")
+
+    prompt = f"""Você é um diretor de edição de vídeo viral de altíssima precisão visual.
+Para cada BEAT abaixo, escolha a ÚNICA cena do CATÁLOGO que REALMENTE mostra na tela o que a FALA e o VISUAL_DESEJADO descrevem.
+
+BEATS DA NARRAÇÃO ({n_beats} beats em ordem cronológica):
+{chr(10).join(beat_lines)}
+
+CATÁLOGO REAL DE CENAS (visto por IA de Visão):
+{chr(10).join(catalog_lines)}
+
+REGRAS ESTRITAS DE COERÊNCIA VISUAL:
+1. Retorne APENAS um JSON válido: {{"scene_ids": [id0, id1, ...]}} com EXATAMENTE {n_beats} inteiros.
+2. COERÊNCIA VISUAL ACIMA DE TUDO: leia a descrição REAL de cada cena no catálogo! Se uma cena do [VIDEO_FONTE] mostra propaganda, tela de menu, rosto falando, outro jogo ou algo sem relação com o BEAT, NÃO escolha essa cena — escolha a cena do catálogo (do [VIDEO_FONTE] ou [BROLL_OFICIAL]) que realmente combina com o texto!
+3. Quando uma cena do [VIDEO_FONTE] mostra EXATAMENTE o assunto do BEAT (especialmente perto do timestamp ref), priorize-a!
+4. Nunca coloque o mesmo ID em dois beats seguidos e evite repetir cenas sempre que houver boas alternativas.
+
+Responda APENAS com o JSON:"""
+
+    selected: list[IndexedScene] = []
+    try:
+        text_model = str(config.get("ollama_modelo", "qwen3:8b"))
+        provider_lbl = config.get("gemini_modelo", "gemini-flash-lite-latest") if is_gemini_active(config) else text_model
+        _log(log_cb, f"[SceneMatcher] Casando {n_beats} beats com {len(indexed_scenes)} cenas REAIS vistas por Visão ({provider_lbl})...")
+        raw = generate_text_llm(prompt=prompt, config=config, expect_json=True, temperature=0.15, max_tokens=1000, timeout=90)
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL | re.IGNORECASE).strip()
+        start, end = raw.find("{"), raw.rfind("}")
+        parsed = json.loads(raw[start : end + 1])
+        ids = parsed.get("scene_ids") or []
+
+        used_prev = -1
+        for i in range(n_beats):
+            raw_id = int(ids[i]) if i < len(ids) else (i % len(indexed_scenes))
+            if raw_id < 0 or raw_id >= len(indexed_scenes):
+                raw_id = i % len(indexed_scenes)
+            if raw_id == used_prev and len(indexed_scenes) > 1:
+                raw_id = (raw_id + 1) % len(indexed_scenes)
+            used_prev = raw_id
+            selected.append(indexed_scenes[raw_id])
+
+        for i in range(min(5, len(selected))):
+            fala_prev = str(beats[i].get("fala") or "")[:38]
+            _log(
+                log_cb,
+                f"[SceneMatcher] Beat {i+1}: \"{fala_prev}...\" -> "
+                f"{selected[i].video_path.name}@{selected[i].start:.1f}s ({selected[i].description[:55]})",
+            )
+    except Exception as exc:
+        _log(log_cb, f"[SceneMatcher] Aviso no casamento beat-a-beat ({exc}). Usando fallback local.")
+        fallback_slots = [f"{b.get('fala', '')} {b.get('o_que_mostrar', '')}" for b in beats]
+        selected = _fallback_keyword_match(fallback_slots, indexed_scenes)
+
+    return [(sc.video_path, sc.start, sc.width, sc.height) for sc in selected]

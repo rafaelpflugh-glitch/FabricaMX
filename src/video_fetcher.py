@@ -121,7 +121,8 @@ def download_video_hd(
     except Exception as exc:
         _log(log_cb, f"[VideoFetcher] Aviso no download ({exc}).")
 
-    if output_path.exists() and output_path.stat().st_size < 150_000:
+    # Remove arquivo parcial/incompleto para nunca contaminar uma nova tentativa de download
+    if output_path.exists():
         output_path.unlink(missing_ok=True)
     return None
 

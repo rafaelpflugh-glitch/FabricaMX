@@ -387,6 +387,7 @@ def render_video(
     config: dict[str, Any],
     broll_videos: list[Path] | None = None,
     matched_scenes: list[tuple[Path, float, int, int]] | None = None,
+    scene_durations: list[float] | None = None,
     placar_texto: str = "",
     log_cb: LogCallback | None = None,
     progress_cb: ProgressCallback | None = None,
@@ -517,6 +518,20 @@ def render_video(
             f"[VideoEngine] Modo fotos HD: {len(scenes)} cenas ({seg_dur:.2f}s cada, zoom suave 4%).",
         )
 
+    # Calcula duração individual por cena (se beat-sync exato fornecido, senão uniforme)
+    per_scene_durs: list[float] = []
+    if scene_durations and len(scene_durations) == len(scenes):
+        # Ajusta proporcionalmente para cobrir exatamente o áudio + overlaps de xfade
+        needed_sum = total_target_dur - intro_dur + (num_segments - 1) * trans_dur
+        raw_sum = sum(max(1.2, float(d)) for d in scene_durations)
+        scale_f = needed_sum / max(1.0, raw_sum)
+        for d in scene_durations:
+            d_adj = max(trans_dur + 0.75, float(d) * scale_f)
+            d_frames = max(int(round(d_adj * fps)), int(round((trans_dur + 0.75) * fps)))
+            per_scene_durs.append(d_frames / float(fps))
+    else:
+        per_scene_durs = [seg_dur] * len(scenes)
+
     # Entradas FFmpeg
     inputs: list[str] = []
     idx_counter = 0
@@ -527,13 +542,13 @@ def render_video(
         intro_idx = idx_counter
         idx_counter += 1
 
-    scene_entries: list[tuple[int, dict[str, Any]]] = []
-    for sc in scenes:
+    scene_entries: list[tuple[int, dict[str, Any], float]] = []
+    for sc, sc_dur in zip(scenes, per_scene_durs):
         if sc["type"] == "video":
-            inputs.extend(["-ss", f"{sc['start']:.2f}", "-t", f"{seg_dur + 0.30:.2f}", "-i", str(sc["path"])])
+            inputs.extend(["-ss", f"{sc['start']:.2f}", "-t", f"{sc_dur + 0.35:.2f}", "-i", str(sc["path"])])
         else:
             inputs.extend(["-i", str(sc["path"])])
-        scene_entries.append((idx_counter, sc))
+        scene_entries.append((idx_counter, sc, sc_dur))
         idx_counter += 1
 
     banner_idx: int | None = None
@@ -580,10 +595,11 @@ def render_video(
 
     # Posição do viewport HD 1080x1080 no canvas 1080x1920 (y=360..1440)
     vp_y = 360
-    denom = max(1, seg_frames - 1)
 
-    for i, (in_idx, sc) in enumerate(scene_entries):
+    for i, (in_idx, sc, sc_dur) in enumerate(scene_entries):
         label = f"seg_{i:02d}"
+        sc_frames = max(int(round(sc_dur * fps)), int(round((trans_dur + 0.75) * fps)))
+        denom = max(1, sc_frames - 1)
         if sc["type"] == "video":
             vw = int(sc.get("w", 1920))
             vh = int(sc.get("h", 1080))
@@ -591,7 +607,7 @@ def render_video(
                 # Clipe já é vertical 9:16 -> tela cheia direta
                 filter_lines.append(
                     f"[{in_idx}:v]"
-                    f"trim=start=0:duration={seg_dur:.3f},setpts=PTS-STARTPTS,"
+                    f"trim=start=0:duration={sc_dur:.3f},setpts=PTS-STARTPTS,"
                     f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
                     f"crop={width}:{height},"
                     f"fps={fps},settb=AVTB,format=yuv420p,setsar=1[{label}]"
@@ -600,7 +616,7 @@ def render_video(
                 # Clipe 16:9 HD -> fundo atmosférico borrado rápido + viewport 1080x1080 nítido (1:1 nativo!)
                 filter_lines.append(
                     f"[{in_idx}:v]"
-                    f"trim=start=0:duration={seg_dur:.3f},setpts=PTS-STARTPTS,"
+                    f"trim=start=0:duration={sc_dur:.3f},setpts=PTS-STARTPTS,"
                     f"fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw_{i}][fraw_{i}]"
                 )
                 filter_lines.append(
@@ -625,10 +641,10 @@ def render_video(
                 f"[{in_idx}:v]"
                 f"scale=1140:2026:flags=lanczos,"
                 f"zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-                f"d={seg_frames}:s={width}x{height}:fps={fps},"
+                f"d={sc_frames}:s={width}x{height}:fps={fps},"
                 f"setpts=PTS-STARTPTS,settb=AVTB,fps={fps},format=yuv420p,setsar=1[{label}]"
             )
-        segment_labels.append((label, seg_dur))
+        segment_labels.append((label, sc_dur))
 
     # Transições rápidas xfade
     if len(segment_labels) == 1:

@@ -13,6 +13,7 @@ import feedparser
 import requests
 
 from src import HISTORY_PATH, load_history, normalize_text
+from src.scene_matcher import index_video_pool, match_beats_to_indexed_scenes
 from src.scraper import NewsArticle
 from src.scriptwriter import ScriptPackage, _call_ollama, _clean_script_text, _count_words, _language_pack, _normalize_hashtags, _parse_json_response
 from src.tts_subtitles import WordTiming
@@ -52,13 +53,14 @@ class TranscriptCue:
 
 @dataclass
 class AdaptedPlan:
-    """Plano do Modo Adaptador YouTube: roteiro reescrito + timestamps exatos do vídeo original."""
+    """Plano do Modo Adaptador YouTube: roteiro beat-a-beat + cenas verificadas por IA de Visão."""
 
     video: YouTubeCandidate
     article: NewsArticle
     script: ScriptPackage
     matched_scenes: list[tuple[Path, float, int, int]]
     source_video_path: Path
+    beats: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -516,119 +518,167 @@ def run_youtube_adapter_stage(
     if video is None or not cues:
         raise RuntimeError(f"Não foi possível obter vídeo com transcrição: {last_err}")
     max_cue_t = cues[-1].end if cues else float(video.duration or 300)
-    digest = _compress_transcript_digest(cues, block_seconds=12)
+    digest = _compress_transcript_digest(cues, block_seconds=12, max_chars=18000)
 
     prompt = f"""{lp['persona']}
 Você recebeu a TRANSCRIÇÃO COM TIMESTAMPS de um vídeo real do YouTube ({video.channel}: "{video.title}").
-Escolha o assunto/segredo/detalhe MAIS VIRAL deste vídeo e transforme em um roteiro de 62 a 72 segundos com SINCRONIA VISUAL PERFEITA usando os timestamps exatos de onde cada coisa aparece no vídeo!
+Escolha o trecho/assunto/capítulo MAIS VIRAL deste vídeo (concentrado numa janela contínua de até 3 minutos do vídeo original para que as imagens reais existam na tela!) e escreva um roteiro de 62 a 70 segundos dividido BEAT A BEAT, onde cada beat tem exatamente a fala + o que precisa aparecer na tela!
 
 TRANSCRIÇÃO COM TIMESTAMPS (em segundos):
 {digest}
 
 REGRAS ESTRITAS (OBRIGATÓRIAS):
-1. Idioma do roteiro, gancho e descrição: {lp['lang_name']}.
-2. Responda APENAS com um JSON válido com estas 6 chaves:
-   - "roteiro": string (OBRIGATÓRIO 195 a 220 palavras para garantir 62 a 70 segundos de áudio a +12% de velocidade! Frases curtas de impacto, sem saudações, com loop aberto no início, CTA no meio "{lp['cta']}" apenas UMA vez, e pergunta provocativa no final)
+1. Idioma das falas, gancho e descrição: {lp['lang_name']}. Traduza 100% dos termos da transcrição para esse idioma — NUNCA misture palavras em espanhol (ex.: 'hormigón' -> 'concreto') ou inglês traduzível no meio da narração.
+2. Responda APENAS com um JSON válido com estas 5 chaves:
+   - "cenas": array de EXATAMENTE 13 a 15 objetos em ordem cronológica da narração, cada objeto com:
+       • "fala": string (12 a 15 palavras corridas de impacto, sem saudações, formando uma história fluida do início ao fim; a soma total de TODOS os beats deve ficar entre 185 e 210 palavras para dar 62 a 68 segundos de áudio; inclua o CTA "{lp['cta']}" apenas UMA vez por volta do beat 9 ou 10, e termine o último beat com uma pergunta provocativa!)
+       • "timestamp_ref": número inteiro (segundo exato da transcrição acima onde esse assunto aparece, todos concentrados numa janela máxima de 3 minutos do vídeo, entre 5 e {max(20, int(max_cue_t - 8))})
+       • "o_que_mostrar": string curta EM INGLÊS descrevendo o visual concreto que DEVE aparecer na tela durante essa fala (ex.: "Jimi Hendrix playing white electric guitar on stage", "Lucia and Jason driving sports car in Vice City neon night")
    - "gancho_tela": string (3 a 5 palavras EM CAIXA ALTA)
-   - "segmentos_video": array de 14 a 18 números inteiros representando os SEGUNDOS EXATOS (timestamps do vídeo acima) em ordem cronológica concentrados no trecho principal escolhido (dentro de uma janela máxima de 3 minutos do vídeo) que mostram exatamente o que cada parte do seu roteiro está explicando! (ex.: [18, 24, 31, 45, 52, ...], todos entre 5 e {max(20, int(max_cue_t - 8))})
    - "descricao_tiktok": string (1 frase chamativa SEM hashtags)
    - "hashtags": array de 6 a 8 hashtags começando com #
    - "resumo_pauta": string (1 frase resumindo o trecho escolhido)
 
 Retorne APENAS o JSON:"""
 
-    _log(log_cb, f"[AdaptadorYT] Gerando roteiro sincronizado + timestamps exatos...")
+    _log(log_cb, f"[AdaptadorYT] Gerando roteiro beat-a-beat sincronizado com o vídeo...")
     raw = _call_ollama(ollama_url, model, prompt, timeout=timeout, config=config)
     data = _parse_json_response(raw)
 
-    roteiro = _clean_script_text(str(data.get("roteiro") or ""))
+    raw_cenas = data.get("cenas") or []
+    beats: list[dict[str, Any]] = []
+    for item in raw_cenas:
+        if not isinstance(item, dict):
+            continue
+        fala = _clean_script_text(str(item.get("fala") or ""))
+        if not fala:
+            continue
+        tref = item.get("timestamp_ref")
+        try:
+            t_num = float(tref) if tref is not None else None
+        except Exception:
+            t_num = None
+        vis = str(item.get("o_que_mostrar") or "").strip()
+        beats.append({"fala": fala, "timestamp_ref": t_num, "o_que_mostrar": vis})
+
+    # Fallback se o modelo devolveu formato legado "roteiro" + "segmentos_video"
+    if len(beats) < 6:
+        legacy_rot = _clean_script_text(str(data.get("roteiro") or ""))
+        sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", legacy_rot) if s.strip()]
+        raw_segs = data.get("segmentos_video") or []
+        beats = []
+        for idx_s, s_txt in enumerate(sents[:15]):
+            t_val = float(raw_segs[idx_s]) if idx_s < len(raw_segs) and isinstance(raw_segs[idx_s], (int, float)) else (10.0 + idx_s * 6.0)
+            beats.append({"fala": s_txt, "timestamp_ref": t_val, "o_que_mostrar": s_txt})
+
+    roteiro = " ".join(b["fala"] for b in beats).strip()
     wc = _count_words(roteiro)
-    if wc < 185:
-        _log(log_cb, f"[AdaptadorYT] Expandindo roteiro ({wc} -> alvo 195-218 palavras para passar de 60s)...")
+    if wc < 185 and beats:
+        _log(log_cb, f"[AdaptadorYT] Expandindo beats ({wc} -> alvo 195-220 palavras para passar de 60s)...")
         exp_prompt = (
-            f"O campo 'roteiro' tem apenas {wc} palavras (daria menos de 60 segundos). Expanda para 198-218 palavras em {lp['lang_name']} "
-            f"usando mais detalhes concretos e reações reais da transcrição acima, mantendo frases curtas e ritmo viral, SEM repetir o pedido de seguir mais de uma vez.\n"
-            f"JSON ATUAL:\n{json.dumps(data, ensure_ascii=False)}\nResponda APENAS com o JSON corrigido:"
+            f"A soma das falas em 'cenas' tem apenas {wc} palavras (menos de 60s). "
+            f"Expanda levemente as falas existentes ou adicione 2-3 beats para totalizar 198-222 palavras em {lp['lang_name']} "
+            f"(13 a 16 beats), mantendo 'timestamp_ref' e 'o_que_mostrar' em cada beat, SEM repetir o pedido de seguir mais de uma vez.\n"
+            f"JSON ATUAL:\n{json.dumps({'cenas': beats}, ensure_ascii=False)}\nResponda APENAS com o JSON {{\"cenas\": [...]}}:"
         )
         try:
             adj_raw = _call_ollama(ollama_url, model, exp_prompt, timeout=timeout, config=config)
             adj_data = _parse_json_response(adj_raw)
-            adj_rot = _clean_script_text(str(adj_data.get("roteiro") or ""))
-            if _count_words(adj_rot) > wc:
-                data = adj_data
-                roteiro = adj_rot
+            adj_cenas = adj_data.get("cenas") or []
+            new_beats = []
+            for item in adj_cenas:
+                if isinstance(item, dict) and str(item.get("fala") or "").strip():
+                    new_beats.append({
+                        "fala": _clean_script_text(str(item.get("fala") or "")),
+                        "timestamp_ref": float(item["timestamp_ref"]) if isinstance(item.get("timestamp_ref"), (int, float)) else None,
+                        "o_que_mostrar": str(item.get("o_que_mostrar") or "").strip(),
+                    })
+            new_rot = " ".join(b["fala"] for b in new_beats).strip()
+            if len(new_beats) >= len(beats) and _count_words(new_rot) > wc:
+                beats = new_beats
+                roteiro = new_rot
                 wc = _count_words(roteiro)
         except Exception:
             pass
 
-    raw_segs = data.get("segmentos_video") or []
-    timestamps: list[float] = []
-    for item in raw_segs:
-        if isinstance(item, (int, float)):
-            t_val = float(item)
-        elif isinstance(item, dict) and "start" in item:
-            t_val = float(item["start"])
-        else:
-            continue
-        if 2.0 <= t_val <= max(10.0, max_cue_t - 4.0):
-            timestamps.append(round(t_val, 2))
+    ref_times = [
+        float(b["timestamp_ref"])
+        for b in beats
+        if isinstance(b.get("timestamp_ref"), (int, float)) and 2.0 <= float(b["timestamp_ref"]) <= max(10.0, max_cue_t - 4.0)
+    ]
+    if not ref_times:
+        ref_times = [10.0, min(max_cue_t - 10.0, 190.0)]
 
-    if len(timestamps) < 10:
-        span_end = min(max_cue_t - 6.0, 240.0)
-        step = max(4.0, (span_end - 8.0) / 16.0)
-        timestamps = [round(8.0 + i * step, 2) for i in range(16)]
-
-    # Baixa apenas o intervalo necessário do vídeo original em 1080p HD (muito mais rápido!)
-    min_t = max(0.0, min(timestamps) - 2.0)
-    max_t = min(max_cue_t, max(timestamps) + 8.0)
-    if (max_t - min_t) > 240.0:
-        # Escolhe a janela de 240s com maior densidade de timestamps escolhidos pela IA
-        best_win: list[float] = []
-        for t_anchor in timestamps:
-            win = [t for t in timestamps if t_anchor <= t <= t_anchor + 230.0]
+    # Escolhe a janela mais densa de até 240s onde estão os timestamps dos beats
+    best_win = ref_times
+    if (max(ref_times) - min(ref_times)) > 230.0:
+        best_win = []
+        for anchor in ref_times:
+            win = [t for t in ref_times if anchor <= t <= anchor + 220.0]
             if len(win) > len(best_win):
                 best_win = win
-        if best_win:
-            timestamps = best_win
-            min_t = max(0.0, min(timestamps) - 2.0)
-            max_t = min(max_cue_t, max(timestamps) + 12.0)
-        else:
-            max_t = min_t + 240.0
-            timestamps = [t for t in timestamps if t <= max_t - 5.0]
+        if not best_win:
+            best_win = ref_times
 
-    # Garante cortes dinâmicos (14-16 cenas de ~4s) preenchendo sub-cortes em torno dos timestamps escolhidos
-    if len(timestamps) < 12:
-        expanded_ts: list[float] = []
-        for idx_t, t_val in enumerate(timestamps):
-            expanded_ts.append(t_val)
-            next_t = timestamps[idx_t + 1] if idx_t + 1 < len(timestamps) else min(max_t - 5.0, t_val + 12.0)
-            gap = next_t - t_val
-            if gap >= 8.0:
-                expanded_ts.append(round(t_val + min(4.5, gap / 2.0), 2))
-        while len(expanded_ts) < 14:
-            last_t = expanded_ts[-1] if expanded_ts else min_t + 4.0
-            cand = round(last_t + 4.5, 2)
-            if cand > max_t - 5.0:
-                break
-            expanded_ts.append(cand)
-        timestamps = sorted(set(expanded_ts))[:16]
+    min_t = max(0.0, min(best_win) - 6.0)
+    max_t = min(max_cue_t, max(best_win) + 18.0)
+    if (max_t - min_t) < 60.0:
+        max_t = min(max_cue_t, min_t + 90.0)
+    if (max_t - min_t) > 240.0:
+        max_t = min_t + 240.0
 
     src_video = work_dir / "adapted_source.mp4"
     sec_str = f"*{min_t:.1f}-{max_t:.1f}" if (video.duration > 260 or min_t > 10.0) else None
     dl = download_video_hd(video.url, src_video, section=sec_str, log_cb=log_cb)
     if not dl:
+        src_video.unlink(missing_ok=True)
         dl = download_video_hd(video.url, src_video, section=None, log_cb=log_cb)
         min_t = 0.0
     if not dl:
         raise RuntimeError(f"Não foi possível baixar o vídeo base em HD: {video.url}")
 
     actual_dur, vw, vh = probe_video_info(dl)
+
+    # VERIFICAÇÃO VISUAL REAL COM GEMINI VISION:
+    # A IA OLHA os frames reais do vídeo baixado (+ biblioteca oficial do nicho, ex.: trailers GTA VI)
+    # e casa CADA BEAT com a cena que REALMENTE mostra o que está sendo narrado!
+    paths_dict = config.get("paths") or {}
+    broll_dir = Path(paths_dict["broll_dir"]) if paths_dict.get("broll_dir") else None
+    niche_id = str(config.get("nicho_ativo", ""))
+    video_exts = (".mp4", ".mov", ".mkv", ".webm")
+    library_videos = (
+        sorted([p for p in broll_dir.iterdir() if p.is_file() and p.suffix.lower() in video_exts and p.stat().st_size > 200_000])
+        if (broll_dir and broll_dir.exists() and niche_id == "gta_vi")
+        else []
+    )
+
+    indexed_scenes = index_video_pool(
+        contextual_videos=[dl],
+        library_videos=library_videos,
+        scene_dur=4.0,
+        work_dir=work_dir,
+        config=config,
+        log_cb=log_cb,
+        contextual_max_samples=22,
+    )
+
     matched_scenes: list[tuple[Path, float, int, int]] = []
-    for ts in timestamps[:18]:
-        rel_t = max(0.2, ts - min_t)
-        if rel_t > max(1.0, actual_dur - 4.5):
-            rel_t = max(0.2, (rel_t % max(4.0, actual_dur - 5.0)))
-        matched_scenes.append((dl, round(rel_t, 2), vw, vh))
+    if indexed_scenes and beats:
+        matched_scenes = match_beats_to_indexed_scenes(
+            beats=beats,
+            indexed_scenes=indexed_scenes,
+            config=config,
+            source_min_t=min_t,
+            log_cb=log_cb,
+        )
+
+    if not matched_scenes:
+        for idx_b, b in enumerate(beats[:18]):
+            ts = float(b.get("timestamp_ref") or (min_t + idx_b * 5.0))
+            rel_t = max(0.2, ts - min_t)
+            if rel_t > max(1.0, actual_dur - 4.5):
+                rel_t = max(0.2, (rel_t % max(4.0, actual_dur - 5.0)))
+            matched_scenes.append((dl, round(rel_t, 2), vw, vh))
 
     gancho = str(data.get("gancho_tela") or video.title[:40]).strip().upper()[:50]
     descricao = re.sub(r"#[\wÁÉÍÓÚÜÑáéíóúüñ]+", "", str(data.get("descricao_tiktok") or video.title)).strip()
@@ -650,7 +700,7 @@ Retorne APENAS o JSON:"""
     )
     _log(
         log_cb,
-        f"[AdaptadorYT] Pronto! {wc} palavras + {len(matched_scenes)} timestamps exatos sincronizados de '{video.channel}'!",
+        f"[AdaptadorYT] Pronto! {wc} palavras em {len(beats)} beats com coerência visual verificada por IA ({video.channel})!",
     )
     return AdaptedPlan(
         video=video,
@@ -658,6 +708,7 @@ Retorne APENAS o JSON:"""
         script=script,
         matched_scenes=matched_scenes,
         source_video_path=dl,
+        beats=beats,
     )
 
 
@@ -708,10 +759,11 @@ def run_original_cut_stage(
     if video is None or not cues:
         raise RuntimeError(f"Não foi possível obter vídeo com transcrição: {last_err}")
     max_cue_t = cues[-1].end if cues else float(video.duration or 300)
-    digest = _compress_transcript_digest(cues, block_seconds=12, max_chars=12000)
+    digest = _compress_transcript_digest(cues, block_seconds=15, max_chars=24000)
 
-    prompt = f"""Você é um editor viral profissional de cortes de TikTok e YouTube Shorts (estilo cortes de Alanzoka, MasterChef Brasil e Pesadelo na Cozinha).
-Analise a transcrição com timestamps abaixo do vídeo "{video.title}" ({video.channel}) e escolha o ÚNICO TRECHO CONTÍNUO de 62 a 74 segundos mais explosivo, engraçado, tenso, polêmico ou surpreendente!
+    prompt = f"""Você é um editor viral profissional de cortes de TikTok e YouTube Shorts (estilo cortes de Alanzoka, MasterChef Brasil, Pesadelo na Cozinha e documentários curtos de música como Tone Lab).
+Analise a transcrição com timestamps abaixo do vídeo "{video.title}" ({video.channel}) e escolha o ÚNICO TRECHO CONTÍNUO de 62 a 74 segundos mais explosivo, interessante, engraçado, tenso ou fascinante!
+Se o vídeo for dividido em capítulos/artistas/tópicos (ex.: lista de 10 guitarristas ou histórias), escolha UM ÚNICO capítulo/artista completo começando EXATAMENTE na apresentação desse artista/tópico e terminando num fechamento forte!
 
 TRANSCRIÇÃO COM TIMESTAMPS (em segundos):
 {digest}
@@ -720,10 +772,10 @@ REGRAS ESTRITAS:
 1. Responda APENAS com um JSON válido com estas 5 chaves:
    - "start_sec": número inteiro (segundo de início do corte, mínimo 10, máximo {max(15, int(max_cue_t - 65))})
    - "end_sec": número inteiro (segundo de fim do corte; DEVE satisfazer end_sec - start_sec entre 62 e 74 segundos!)
-   - "gancho_tela": string em {lp['lang_name']} (4 a 7 palavras EM CAIXA ALTA que façam a pessoa parar o scroll na hora, ex.: "JACQUIN PERDE A PACIÊNCIA NA COZINHA!" ou "LUCIA CAI DO FAROL E SOBREVIVE!")
+   - "gancho_tela": string em {lp['lang_name']} (4 a 7 palavras EM CAIXA ALTA que façam a pessoa parar o scroll na hora, ex.: "O SEGREDO DO TIMBRE DE JIMI HENDRIX!" ou "JACQUIN PERDE A PACIÊNCIA NA COZINHA!")
    - "descricao_tiktok": string curta e provocativa em {lp['lang_name']} (SEM hashtags)
    - "hashtags": array de 6 a 8 hashtags começando com #
-2. O corte deve começar num gancho forte de fala/ação e terminar num fechamento/pico marcante (não corte no meio de uma frase se possível).
+2. O corte deve começar exatamente no início de uma frase/capítulo e terminar num fechamento marcante (não corte no meio de uma frase).
 
 Retorne APENAS o JSON:"""
 

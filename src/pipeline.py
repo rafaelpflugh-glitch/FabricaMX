@@ -214,6 +214,28 @@ class FabricaPipeline:
                 )
                 self._progress(5, f"{prefix}5/5 Render FFmpeg", 0.74)
 
+                # Calcula a duração EXATA de cada beat a partir dos timestamps reais de palavra do Edge-TTS!
+                beat_durations: list[float] | None = None
+                if adapted.beats and len(adapted.beats) == len(adapted.matched_scenes) and tts_result.word_timings:
+                    wt_list = tts_result.word_timings
+                    total_w = len(wt_list)
+                    beat_word_counts = [max(1, len(str(b.get("fala") or "").split())) for b in adapted.beats]
+                    sum_bw = max(1, sum(beat_word_counts))
+                    beat_durations = []
+                    cursor_w = 0
+                    prev_end_t = 0.0
+                    for idx_b, bwc in enumerate(beat_word_counts):
+                        if idx_b == len(beat_word_counts) - 1:
+                            end_t = float(tts_result.duration)
+                        else:
+                            scaled_w = max(1, int(round((bwc / sum_bw) * total_w)))
+                            end_idx = min(total_w - 1, cursor_w + scaled_w - 1)
+                            end_t = float(wt_list[end_idx].end)
+                            cursor_w = min(total_w - 1, end_idx + 1)
+                        dur_b = max(1.4, end_t - prev_end_t)
+                        beat_durations.append(round(dur_b, 3))
+                        prev_end_t = max(prev_end_t + 0.5, end_t)
+
                 def _on_adp_pct(ratio: float) -> None:
                     self._progress(5, f"{prefix}5/5 Render FFmpeg ({int(ratio * 100)}%)", 0.74 + 0.26 * ratio)
 
@@ -233,6 +255,7 @@ class FabricaPipeline:
                     config=self.config,
                     broll_videos=[adapted.source_video_path],
                     matched_scenes=adapted.matched_scenes,
+                    scene_durations=beat_durations,
                     placar_texto=placar_texto,
                     log_cb=self._log,
                     progress_cb=_on_adp_pct,
