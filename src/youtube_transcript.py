@@ -333,63 +333,66 @@ def _parse_vtt_subtitles(vtt_path: Path) -> list[TranscriptCue]:
 def fetch_transcript_cues(
     video_url: str,
     work_dir: Path,
-    preferred_langs: tuple[str, ...] = ("pt", "pt-BR", "en", "es"),
+    preferred_langs: tuple[str, ...] = ("pt", "en", "es"),
     log_cb: LogCallback | None = None,
 ) -> list[TranscriptCue]:
-    """Baixa a transcrição com timestamps do YouTube via yt-dlp (json3 ou vtt), suportando en-orig / pt-BR / etc."""
+    """
+    Baixa a transcrição com timestamps do YouTube via yt-dlp (json3 ou vtt).
+    Pede UM idioma por vez para evitar HTTP 429 do YouTube ao baixar múltiplas traduções.
+    """
     ytdlp = _find_ytdlp()
     sub_dir = work_dir / "yt_subs"
     sub_dir.mkdir(parents=True, exist_ok=True)
-    # Limpa arquivos antigos de tentativa anterior
     for old in sub_dir.glob("*"):
         old.unlink(missing_ok=True)
 
-    lang_regex = "pt.*,pt,en.*,en,es.*,es"
-    _log(log_cb, "[YouTube] Baixando transcrição com timestamps exatos...")
-    for sub_fmt in ("json3", "vtt"):
-        cmd = [
-            ytdlp,
-            "--skip-download",
-            "--no-playlist",
-            "--no-warnings",
-            "--quiet",
-            "--write-sub",
-            "--write-auto-sub",
-            "--sub-langs",
-            lang_regex,
-            "--sub-format",
-            sub_fmt,
-            "-o",
-            str(sub_dir / "sub"),
-            video_url,
-        ]
-        try:
-            subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=35,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-        except Exception:
-            continue
+    # Deduplica preservando ordem e prioriza faixa original (sem wildcards que causam 429)
+    ordered_langs: list[str] = []
+    for lang in preferred_langs:
+        base = lang.split("-")[0].lower()
+        if base not in ordered_langs:
+            ordered_langs.append(base)
+    for fallback in ("en", "pt", "es"):
+        if fallback not in ordered_langs:
+            ordered_langs.append(fallback)
 
-        files = sorted(sub_dir.glob(f"*.{sub_fmt}"))
-        if files:
-            chosen = files[0]
-            for pref in preferred_langs:
-                pref_l = pref.lower()
-                for f in files:
-                    if f".{pref_l}." in f.name.lower() or f".{pref_l}-" in f.name.lower():
-                        chosen = f
-                        break
-                else:
-                    continue
-                break
-            cues = _parse_json3_subtitles(chosen) if sub_fmt == "json3" else _parse_vtt_subtitles(chosen)
-            if cues:
-                _log(log_cb, f"[YouTube] Transcrição carregada: {len(cues)} blocos temporais ({chosen.name}).")
-                return cues
+    _log(log_cb, "[YouTube] Baixando transcrição com timestamps exatos...")
+    for lang in ordered_langs:
+        for sub_fmt in ("json3", "vtt"):
+            cmd = [
+                ytdlp,
+                "--skip-download",
+                "--no-playlist",
+                "--no-warnings",
+                "--quiet",
+                "--write-sub",
+                "--write-auto-sub",
+                "--sub-langs",
+                lang,
+                "--sub-format",
+                sub_fmt,
+                "-o",
+                str(sub_dir / "sub"),
+                video_url,
+            ]
+            try:
+                subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except Exception:
+                continue
+
+            files = sorted(sub_dir.glob(f"*.{sub_fmt}"))
+            if files:
+                chosen = files[0]
+                cues = _parse_json3_subtitles(chosen) if sub_fmt == "json3" else _parse_vtt_subtitles(chosen)
+                if cues:
+                    _log(log_cb, f"[YouTube] Transcrição carregada: {len(cues)} blocos temporais ({chosen.name}).")
+                    return cues
 
     raise RuntimeError("Não foi possível obter a transcrição/legendas deste vídeo no YouTube.")
 
@@ -481,7 +484,10 @@ def run_youtube_adapter_stage(
     timeout = int(config.get("ollama_timeout", 180))
     lp = _language_pack(config)
     idioma = str(config.get("idioma", "pt-BR"))
-    pref_langs = ("pt", "pt-BR", "en", "es") if idioma.startswith("pt") else ("en", "es", "pt")
+    # Para o Adaptador (gameranx, IGN, Premier Guitar, Rick Beato), prioriza faixa original (en -> pt -> es) para evitar 429 de tradução
+    pref_langs = ("en", "pt", "es") if str(config.get("nicho_ativo", "")) in ("musica_gear", "gta_vi") else (
+        ("pt", "en", "es") if idioma.startswith("pt") else ("es", "en", "pt")
+    )
 
     tried_urls = set(exclude_urls or set())
     video: YouTubeCandidate | None = None
@@ -646,7 +652,7 @@ def run_original_cut_stage(
     timeout = int(config.get("ollama_timeout", 180))
     lp = _language_pack(config)
     idioma = str(config.get("idioma", "pt-BR"))
-    pref_langs = ("pt", "pt-BR", "en", "es") if idioma.startswith("pt") else ("en", "es", "pt")
+    pref_langs = ("pt", "en", "es") if idioma.startswith("pt") else ("en", "es", "pt")
 
     tried_urls = set(exclude_urls or set())
     video: YouTubeCandidate | None = None
