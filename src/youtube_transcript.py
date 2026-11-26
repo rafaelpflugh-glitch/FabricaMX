@@ -537,21 +537,21 @@ REGRAS ESTRITAS (OBRIGATÓRIAS):
 
 Retorne APENAS o JSON:"""
 
-    _log(log_cb, f"[AdaptadorYT] Gerando roteiro sincronizado + timestamps exatos via {model}...")
-    raw = _call_ollama(ollama_url, model, prompt, timeout=timeout)
+    _log(log_cb, f"[AdaptadorYT] Gerando roteiro sincronizado + timestamps exatos...")
+    raw = _call_ollama(ollama_url, model, prompt, timeout=timeout, config=config)
     data = _parse_json_response(raw)
 
     roteiro = _clean_script_text(str(data.get("roteiro") or ""))
     wc = _count_words(roteiro)
-    if wc < 130:
+    if wc < 155:
         _log(log_cb, f"[AdaptadorYT] Expandindo roteiro ({wc} -> alvo 175-198 palavras)...")
         exp_prompt = (
             f"O campo 'roteiro' tem apenas {wc} palavras. Expanda para 178-198 palavras em {lp['lang_name']} "
-            f"usando mais detalhes reais da transcrição acima, mantendo frases curtas e o CTA no meio.\n"
+            f"usando mais detalhes reais da transcrição acima, mantendo frases curtas, SEM repetir o pedido de seguir mais de uma vez.\n"
             f"JSON ATUAL:\n{json.dumps(data, ensure_ascii=False)}\nResponda APENAS com o JSON corrigido:"
         )
         try:
-            adj_raw = _call_ollama(ollama_url, model, exp_prompt, timeout=timeout)
+            adj_raw = _call_ollama(ollama_url, model, exp_prompt, timeout=timeout, config=config)
             adj_data = _parse_json_response(adj_raw)
             adj_rot = _clean_script_text(str(adj_data.get("roteiro") or ""))
             if _count_words(adj_rot) > wc:
@@ -700,8 +700,8 @@ REGRAS ESTRITAS:
 
 Retorne APENAS o JSON:"""
 
-    _log(log_cb, f"[CortadorViral] Analisando transcrição com {model} para achar o melhor corte de 62–74s...")
-    raw = _call_ollama(ollama_url, model, prompt, timeout=timeout)
+    _log(log_cb, f"[CortadorViral] Analisando transcrição para achar o melhor corte de 62–74s...")
+    raw = _call_ollama(ollama_url, model, prompt, timeout=timeout, config=config)
     data = _parse_json_response(raw)
 
     start_sec = float(data.get("start_sec") or 20.0)

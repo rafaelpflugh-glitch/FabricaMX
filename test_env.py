@@ -28,6 +28,7 @@ REQUIRED_MODULES = [
 ]
 
 INTERNAL_MODULES = [
+    "src.llm_client",
     "src.scraper",
     "src.scriptwriter",
     "src.media_fetcher",

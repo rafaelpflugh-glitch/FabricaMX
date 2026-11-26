@@ -868,12 +868,24 @@ def render_original_cut_video(
 
     vp_y = 360
     escaped_ass = escape_ffmpeg_filter_path(ass_path)
+    # No nicho TV & Realities, corta 7% da borda inferior do vídeo 16:9 original para eliminar legendas antigas da Band
+    if niche_id == "tv_realities":
+        fg_filter = (
+            f"[fraw]crop=iw:ih*0.92:0:0,"
+            f"scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={width}:{width},eq=contrast=1.05:saturation=1.06[fg]"
+        )
+    else:
+        fg_filter = (
+            f"[fraw]scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={width}:{width},eq=contrast=1.05:saturation=1.06[fg]"
+        )
+
     filter_lines = [
         f"[0:v]fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw][fraw]",
         f"[braw]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
         f"boxblur=8:2,scale={width}:{height}:flags=bilinear,eq=brightness=-0.32:saturation=1.18[bg]",
-        f"[fraw]scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
-        f"crop={width}:{width},eq=contrast=1.05:saturation=1.06[fg]",
+        fg_filter,
         f"[bg][fg]overlay=0:{vp_y},"
         f"drawbox=x=0:y={vp_y - 3}:w={width}:h=3:color=white@0.28:t=fill,"
         f"drawbox=x=0:y={vp_y + width}:w={width}:h=3:color=white@0.28:t=fill[v_base]",

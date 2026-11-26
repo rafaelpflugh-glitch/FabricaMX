@@ -21,6 +21,7 @@ from src import (
     save_config,
     save_niche_config,
 )
+from src.llm_client import GEMINI_MODELS, load_gemini_api_key, save_gemini_api_key
 from src.pipeline import FabricaPipeline
 from src.scraper import NewsArticle
 from src.scriptwriter import ScriptPackage, list_ollama_models
@@ -48,6 +49,12 @@ MODE_LABELS = {
     "top5": "Top 5 / Segredos Virais",
 }
 LABEL_TO_MODE = {v: k for k, v in MODE_LABELS.items()}
+
+PROVIDER_LABELS = {
+    "gemini": "Gemini API (Grátis • Recomendado)",
+    "ollama": "Ollama Local (PC)",
+}
+LABEL_TO_PROVIDER = {v: k for k, v in PROVIDER_LABELS.items()}
 
 PIPELINE_STEPS = [
     "1/5 Pauta",
@@ -236,17 +243,54 @@ class FabricaTKApp(ctk.CTk):
         )
         self.voice_menu.grid(row=9, column=0, sticky="ew", padx=6, pady=(2, 10))
 
-        # 4. Modelo Ollama + botão Listar Modelos
-        self._section_label(controls, "MODELO OLLAMA (ALTERNE LIVREMENTE)", row=10)
+        # 4. Provedor de IA (Gemini API vs Ollama Local) + Modelo + Chave Gemini
+        self._section_label(controls, "PROVEDOR DE IA (ROTEIRO & VISÃO)", row=10)
+        cur_prov = str(self.global_cfg.get("provedor_ia", "ollama")).strip().lower()
+        self.provider_var = ctk.StringVar(value=PROVIDER_LABELS.get(cur_prov, PROVIDER_LABELS["ollama"]))
+        self.provider_menu = ctk.CTkOptionMenu(
+            controls,
+            values=list(PROVIDER_LABELS.values()),
+            variable=self.provider_var,
+            command=self._on_provider_changed,
+            fg_color=BG_INPUT,
+            button_color=ACCENT_CYAN_DARK,
+            button_hover_color=ACCENT_CYAN,
+            dropdown_fg_color=BG_CARD,
+            dropdown_hover_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=34,
+        )
+        self.provider_menu.grid(row=11, column=0, sticky="ew", padx=6, pady=(2, 6))
+
+        self.gemini_key_entry = ctk.CTkEntry(
+            controls,
+            placeholder_text="Chave Gemini API (grátis em aistudio.google.com/apikey)",
+            show="*",
+            fg_color=BG_INPUT,
+            border_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=32,
+        )
+        saved_key = load_gemini_api_key()
+        if saved_key:
+            self.gemini_key_entry.insert(0, saved_key)
+        self.gemini_key_entry.grid(row=12, column=0, sticky="ew", padx=6, pady=(0, 8))
+
+        self._section_label(controls, "MODELO DE IA (GEMINI OU OLLAMA LOCAL)", row=13)
         ollama_row = ctk.CTkFrame(controls, fg_color="transparent")
-        ollama_row.grid(row=11, column=0, sticky="ew", padx=6, pady=(2, 10))
+        ollama_row.grid(row=14, column=0, sticky="ew", padx=6, pady=(2, 10))
         ollama_row.grid_columnconfigure(0, weight=1)
 
-        default_model = self.global_cfg.get("ollama_modelo", "qwen3:8b")
+        default_model = (
+            self.global_cfg.get("gemini_modelo", GEMINI_MODELS[0])
+            if cur_prov == "gemini"
+            else self.global_cfg.get("ollama_modelo", "qwen3:8b")
+        )
+        self.ollama_models_cache: list[str] = [self.global_cfg.get("ollama_modelo", "qwen3:8b")]
         self.model_var = ctk.StringVar(value=default_model)
         self.model_combo = ctk.CTkComboBox(
             ollama_row,
-            values=[default_model],
+            values=GEMINI_MODELS if cur_prov == "gemini" else self.ollama_models_cache,
             variable=self.model_var,
             fg_color=BG_INPUT,
             border_color=BORDER_SUBTLE,
@@ -275,7 +319,7 @@ class FabricaTKApp(ctk.CTk):
 
         # 5. Quantidade de vídeos no lote (1 a 5)
         batch_header = ctk.CTkFrame(controls, fg_color="transparent")
-        batch_header.grid(row=12, column=0, sticky="ew", padx=6, pady=(4, 2))
+        batch_header.grid(row=15, column=0, sticky="ew", padx=6, pady=(4, 2))
         ctk.CTkLabel(
             batch_header,
             text="VÍDEOS NO LOTE",
@@ -303,10 +347,10 @@ class FabricaTKApp(ctk.CTk):
             height=32,
         )
         self.batch_seg.set("1")
-        self.batch_seg.grid(row=13, column=0, sticky="ew", padx=6, pady=(2, 12))
+        self.batch_seg.grid(row=16, column=0, sticky="ew", padx=6, pady=(2, 12))
 
         # 6. Opções avançadas opcionais (100% automático se deixar em branco!)
-        self._section_label(controls, "LINK YOUTUBE / PLACAR (OPCIONAL • VAZIO = AUTO)", row=14)
+        self._section_label(controls, "LINK YOUTUBE / PLACAR (OPCIONAL • VAZIO = AUTO)", row=17)
         self.custom_video_entry = ctk.CTkEntry(
             controls,
             placeholder_text="URL YouTube (ou deixe vazio p/ baixar sozinho)",
@@ -315,7 +359,7 @@ class FabricaTKApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             height=32,
         )
-        self.custom_video_entry.grid(row=15, column=0, sticky="ew", padx=6, pady=(2, 6))
+        self.custom_video_entry.grid(row=18, column=0, sticky="ew", padx=6, pady=(2, 6))
 
         self.placar_entry = ctk.CTkEntry(
             controls,
@@ -325,7 +369,7 @@ class FabricaTKApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             height=32,
         )
-        self.placar_entry.grid(row=16, column=0, sticky="ew", padx=6, pady=(0, 10))
+        self.placar_entry.grid(row=19, column=0, sticky="ew", padx=6, pady=(0, 10))
 
         # 7. Switches
         switch_card = ctk.CTkFrame(
@@ -335,7 +379,7 @@ class FabricaTKApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        switch_card.grid(row=17, column=0, sticky="ew", padx=6, pady=(2, 6))
+        switch_card.grid(row=20, column=0, sticky="ew", padx=6, pady=(2, 6))
         switch_card.grid_columnconfigure(0, weight=1)
 
         video_cfg = self.global_cfg.get("video", {})
@@ -661,11 +705,34 @@ class FabricaTKApp(ctk.CTk):
             self.keywords_entry.delete(0, "end")
             self.keywords_entry.insert(0, ", ".join(preset_kw))
 
+    def _on_provider_changed(self, selected_label: str) -> None:
+        prov = LABEL_TO_PROVIDER.get(selected_label, "ollama")
+        if prov == "gemini":
+            self.model_combo.configure(values=GEMINI_MODELS)
+            self.model_var.set(self.global_cfg.get("gemini_modelo", GEMINI_MODELS[0]))
+            self._append_log("[IA] Provedor alterado para Gemini API (cole sua chave grátis do Google AI Studio).")
+        else:
+            vals = self.ollama_models_cache or ["qwen3:8b"]
+            self.model_combo.configure(values=vals)
+            cur = self.global_cfg.get("ollama_modelo", "qwen3:8b")
+            self.model_var.set(cur if cur in vals else vals[0])
+            self._append_log("[IA] Provedor alterado para Ollama Local.")
+
     def _collect_runtime_config(self) -> dict[str, Any]:
         # Atualiza config global
+        prov = LABEL_TO_PROVIDER.get(self.provider_var.get(), "ollama")
         self.global_cfg["nicho_ativo"] = self.active_niche_id
-        self.global_cfg["modo_conteudo"] = LABEL_TO_MODE.get(self.mode_var.get(), "top5")
-        self.global_cfg["ollama_modelo"] = self.model_var.get().strip() or "qwen3:8b"
+        self.global_cfg["modo_conteudo"] = LABEL_TO_MODE.get(self.mode_var.get(), "adaptador_yt")
+        self.global_cfg["provedor_ia"] = prov
+        chosen_model = self.model_var.get().strip()
+        if prov == "gemini":
+            self.global_cfg["gemini_modelo"] = chosen_model or GEMINI_MODELS[0]
+        else:
+            self.global_cfg["ollama_modelo"] = chosen_model or "qwen3:8b"
+
+        api_key = self.gemini_key_entry.get().strip()
+        if api_key:
+            save_gemini_api_key(api_key)
 
         video_cfg = dict(self.global_cfg.get("video", {}))
         video_cfg["usar_musica"] = bool(self.music_var.get())
@@ -690,6 +757,7 @@ class FabricaTKApp(ctk.CTk):
             self._append_log(f"Aviso ao salvar configurações: {exc}")
 
         self.runtime_cfg = build_runtime_config(self.global_cfg, self.active_niche_id)
+        self.runtime_cfg["gemini_api_key"] = api_key
         self.runtime_cfg["video_url_opcional"] = self.custom_video_entry.get().strip()
         self.runtime_cfg["placar_opcional"] = self.placar_entry.get().strip()
         return self.runtime_cfg
@@ -714,15 +782,17 @@ class FabricaTKApp(ctk.CTk):
     def _on_models_loaded(self, models: list[str], error: str | None) -> None:
         self.refresh_models_btn.configure(state="normal", text="Listar")
         if error:
-            self._append_log(f"[Ollama] Indisponível ({error}). Verifique se 'ollama serve' está rodando.")
+            self._append_log(f"[Ollama] Indisponível ({error}). Você pode usar Gemini API ou iniciar 'ollama serve'.")
             return
         if not models:
             self._append_log("[Ollama] Nenhum modelo instalado. Execute ex.: 'ollama pull qwen3:8b'.")
             return
-        self.model_combo.configure(values=models)
-        current = self.model_var.get().strip()
-        if current not in models:
-            self.model_var.set(models[0])
+        self.ollama_models_cache = models
+        if LABEL_TO_PROVIDER.get(self.provider_var.get(), "ollama") == "ollama":
+            self.model_combo.configure(values=models)
+            current = self.model_var.get().strip()
+            if current not in models:
+                self.model_var.set(models[0])
         self._append_log(f"[Ollama] {len(models)} modelo(s) disponíveis: {', '.join(models)}")
 
     def _append_log(self, message: str) -> None:
@@ -785,6 +855,8 @@ class FabricaTKApp(ctk.CTk):
             self.focus_menu,
             self.keywords_entry,
             self.voice_menu,
+            self.provider_menu,
+            self.gemini_key_entry,
             self.model_combo,
             self.refresh_models_btn,
             self.batch_seg,

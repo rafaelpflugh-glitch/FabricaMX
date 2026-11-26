@@ -17,6 +17,10 @@ nichos/*/assets/broll/*.mkv
 nichos/*/assets/broll/*.webm
 nichos/*/assets/broll/scene_index.json
 
+# Segredos / chaves de API locais (NUNCA subir pro GitHub!)
+secrets.json
+.env
+
 # Sistema operacional / IDEs
 .DS_Store
 Thumbs.db

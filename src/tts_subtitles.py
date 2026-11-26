@@ -321,6 +321,30 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write("\n")
 
 
+def normalize_text_for_tts(text: str, idioma: str = "pt-BR") -> str:
+    """Normaliza siglas, moedas e símbolos para pronúncia 100% natural no Edge-TTS."""
+    s = (text or "").strip()
+    lang = idioma.lower()
+    if lang.startswith("pt"):
+        s = re.sub(r"\bUS\$\s*([\d.,]+)\s*(bilh[õo]es|milh[õo]es|mil)\b", r"\1 \2 de dólares", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bUS\$\s*([\d.,]+)\b", r"\1 dólares", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bR\$\s*([\d.,]+)\b", r"\1 reais", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bPS5\b", "PlayStation 5", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bGTA\s*VI\b", "GTA 6", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bGTA\s*V\b", "GTA 5", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bautocarro\b", "ônibus", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bconsola\b", "console", s, flags=re.IGNORECASE)
+        s = re.sub(r"\becrã\b", "tela", s, flags=re.IGNORECASE)
+    elif lang.startswith("es"):
+        s = re.sub(r"\bUS\$\s*([\d.,]+)\b", r"\1 dólares", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bPS5\b", "PlayStation 5", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bGTA\s*VI\b", "GTA 6", s, flags=re.IGNORECASE)
+    else:
+        s = re.sub(r"\bPS5\b", "PlayStation 5", s, flags=re.IGNORECASE)
+        s = re.sub(r"\bGTA\s*VI\b", "GTA 6", s, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def generate_narration_and_subtitles(
     script_text: str,
     work_dir: Path,
@@ -337,6 +361,8 @@ def generate_narration_and_subtitles(
     voice = config.get("tts_voz", "es-MX-JorgeNeural")
     rate = config.get("tts_velocidade", "+8%")
     pitch = config.get("tts_pitch", "+0Hz")
+    idioma = str(config.get("idioma", "pt-BR"))
+    spoken_text = normalize_text_for_tts(script_text, idioma=idioma)
 
     _log(log_cb, f"[TTS] Gerando áudio com voz {voice} (velocidade {rate})...")
 
@@ -346,7 +372,7 @@ def generate_narration_and_subtitles(
         asyncio.set_event_loop(loop)
         word_timings = loop.run_until_complete(
             _synthesize_edge_tts(
-                text=script_text,
+                text=spoken_text,
                 voice=voice,
                 rate=rate,
                 pitch=pitch,

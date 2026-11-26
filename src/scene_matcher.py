@@ -13,6 +13,7 @@ from typing import Any, Callable
 import requests
 
 from src import normalize_text
+from src.llm_client import describe_frames_batch_gemini, generate_text_llm, is_gemini_active
 from src.scriptwriter import list_ollama_models
 from src.tts_subtitles import WordTiming
 from src.video_fetcher import probe_video_info
@@ -166,11 +167,12 @@ def index_video_pool(
     broll_dir = Path(paths_dict["broll_dir"]) if paths_dict.get("broll_dir") else work_dir
     cache_path = broll_dir / "scene_index.json"
 
-    vision_model = find_vision_model(ollama_url)
+    use_gemini_vision = is_gemini_active(config)
+    vision_model = str(config.get("gemini_modelo") or "gemini-2.5-flash") if use_gemini_vision else find_vision_model(ollama_url)
     if not vision_model:
         _log(
             log_cb,
-            "[SceneMatcher] Nenhum modelo de visão instalado no Ollama (ex.: 'ollama pull moondream'). "
+            "[SceneMatcher] Nenhum modelo de visão disponível (configure Gemini API ou 'ollama pull moondream'). "
             "Usando seleção inteligente padrão.",
         )
         return []
@@ -224,25 +226,43 @@ def index_video_pool(
         )
 
         entries_for_cache: list[dict[str, Any]] = []
-        for ts in timestamps:
-            # Pega o frame do meio da cena (ts + scene_dur / 2) para refletir a ação principal
-            b64 = _extract_frame_b64(vf, ts + scene_dur * 0.45, tmp_frame)
-            if not b64:
-                continue
-            desc = _describe_frame_ollama(b64, vision_model, ollama_url, niche_hint)
-            if not desc:
-                desc = f"{niche_hint} action scene"
-            indexed.append(
-                IndexedScene(
-                    video_path=vf,
-                    start=ts,
-                    width=w,
-                    height=h,
-                    description=desc,
-                    is_contextual=is_ctx,
+        if use_gemini_vision:
+            # Lote ultrarrápido via Gemini Vision (até 10 frames por chamada!)
+            extracted: list[tuple[float, str]] = []
+            for ts in timestamps:
+                b64 = _extract_frame_b64(vf, ts + scene_dur * 0.45, tmp_frame)
+                if b64:
+                    extracted.append((ts, b64))
+            for b_i in range(0, len(extracted), 10):
+                chunk = extracted[b_i : b_i + 10]
+                try:
+                    descs = describe_frames_batch_gemini([c[1] for c in chunk], config, niche_hint)
+                except Exception:
+                    descs = [f"{niche_hint} action scene"] * len(chunk)
+                for (ts, _), desc in zip(chunk, descs):
+                    indexed.append(
+                        IndexedScene(video_path=vf, start=ts, width=w, height=h, description=desc, is_contextual=is_ctx)
+                    )
+                    entries_for_cache.append({"start": ts, "desc": desc})
+        else:
+            for ts in timestamps:
+                b64 = _extract_frame_b64(vf, ts + scene_dur * 0.45, tmp_frame)
+                if not b64:
+                    continue
+                desc = _describe_frame_ollama(b64, vision_model, ollama_url, niche_hint)
+                if not desc:
+                    desc = f"{niche_hint} action scene"
+                indexed.append(
+                    IndexedScene(
+                        video_path=vf,
+                        start=ts,
+                        width=w,
+                        height=h,
+                        description=desc,
+                        is_contextual=is_ctx,
+                    )
                 )
-            )
-            entries_for_cache.append({"start": ts, "desc": desc})
+                entries_for_cache.append({"start": ts, "desc": desc})
 
         if not is_ctx and entries_for_cache:
             cache[cache_key] = entries_for_cache
@@ -360,25 +380,11 @@ REGRAS ESTRITAS:
 
 Responda APENAS com o JSON:"""
 
-    payload: dict[str, Any] = {
-        "model": text_model,
-        "prompt": prompt,
-        "stream": False,
-        "format": "json",
-        "options": {"temperature": 0.25, "num_predict": 400},
-    }
-    if "qwen3" in text_model.lower():
-        payload["think"] = False
-
     selected_scenes: list[IndexedScene] = []
     try:
-        _log(log_cb, f"[SceneMatcher] Sincronizando {num_scenes} trechos de fala com {len(indexed_scenes)} cenas indexadas via {text_model}...")
-        resp = requests.post(f"{ollama_url.rstrip('/')}/api/generate", json=payload, timeout=90)
-        if resp.status_code == 400 and "think" in payload:
-            payload.pop("think", None)
-            resp = requests.post(f"{ollama_url.rstrip('/')}/api/generate", json=payload, timeout=90)
-        resp.raise_for_status()
-        raw = str(resp.json().get("response") or "")
+        provider_lbl = config.get("gemini_modelo", "gemini-2.5-flash") if is_gemini_active(config) else text_model
+        _log(log_cb, f"[SceneMatcher] Sincronizando {num_scenes} trechos de fala com {len(indexed_scenes)} cenas via {provider_lbl}...")
+        raw = generate_text_llm(prompt=prompt, config=config, expect_json=True, temperature=0.25, max_tokens=500, timeout=90)
         raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL | re.IGNORECASE).strip()
         start, end = raw.find("{"), raw.rfind("}")
         parsed = json.loads(raw[start : end + 1])

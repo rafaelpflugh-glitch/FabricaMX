@@ -11,6 +11,7 @@ from typing import Any, Callable
 import requests
 
 from src import HISTORY_PATH, load_history, normalize_text
+from src.llm_client import generate_text_llm, is_gemini_active
 from src.scraper import NewsArticle
 
 LogCallback = Callable[[str], None]
@@ -348,39 +349,13 @@ def _call_ollama(
     model: str,
     prompt: str,
     timeout: int = 180,
+    config: dict[str, Any] | None = None,
 ) -> str:
-    endpoint = f"{ollama_url.rstrip('/')}/api/generate"
-    payload: dict[str, Any] = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "format": "json",
-        "options": {
-            "temperature": 0.74,
-            "top_p": 0.9,
-            "num_predict": 1300,
-        },
-    }
-    # Desativa raciocínio longo oculto em modelos Qwen3 para respostas rápidas e JSON limpo
-    if "qwen3" in model.lower():
-        payload["think"] = False
-
-    resp = requests.post(endpoint, json=payload, timeout=timeout)
-    if resp.status_code == 400 and "think" in payload:
-        payload.pop("think", None)
-        resp = requests.post(endpoint, json=payload, timeout=timeout)
-
-    if resp.status_code == 404:
-        raise RuntimeError(
-            f"Modelo Ollama '{model}' não encontrado localmente. "
-            f"Execute 'ollama pull {model}' ou escolha outro modelo instalado na lista."
-        )
-    resp.raise_for_status()
-    data = resp.json()
-    text = data.get("response", "")
-    if not text:
-        raise RuntimeError("Ollama retornou uma resposta vazia.")
-    return text
+    """Wrapper unificado que usa Gemini API quando ativo ou Ollama Local."""
+    cfg = dict(config or {})
+    cfg.setdefault("ollama_url", ollama_url)
+    cfg.setdefault("ollama_modelo", model)
+    return generate_text_llm(prompt=prompt, config=cfg, expect_json=True, temperature=0.74, max_tokens=1400, timeout=timeout)
 
 
 def generate_script(
@@ -388,9 +363,11 @@ def generate_script(
     config: dict[str, Any],
     log_cb: LogCallback | None = None,
 ) -> ScriptPackage:
-    """Gera roteiro viral de alta retenção via Ollama no nicho e idioma configurados."""
+    """Gera roteiro viral de alta retenção via Gemini API ou Ollama local."""
     ollama_url = config.get("ollama_url", "http://localhost:11434")
-    model = config.get("ollama_modelo", "qwen3:8b")
+    use_gemini = is_gemini_active(config)
+    model = config.get("gemini_modelo", "gemini-2.5-flash") if use_gemini else config.get("ollama_modelo", "qwen3:8b")
+    provider_tag = "Gemini API" if use_gemini else "Ollama Local"
     timeout = int(config.get("ollama_timeout", 180))
     niche_name = str(config.get("nicho_nome", "Fábrica TK"))
     idioma = str(config.get("idioma", "pt-BR"))
@@ -398,7 +375,7 @@ def generate_script(
 
     is_top5 = modo == "top5" or article.url.startswith("top5://")
     mode_label = "Top 5 Viral" if is_top5 else "Notícia Viral"
-    _log(log_cb, f"[Scriptwriter] {niche_name} | {mode_label} ({idioma}) | Modelo: {model}...")
+    _log(log_cb, f"[Scriptwriter] {niche_name} | {mode_label} ({idioma}) | {provider_tag}: {model}...")
 
     prompt = _build_top5_prompt(article, config) if is_top5 else _build_news_prompt(article, config)
 
@@ -407,7 +384,7 @@ def generate_script(
 
     for attempt in range(1, 3):
         try:
-            raw = _call_ollama(ollama_url, model, prompt, timeout=timeout)
+            raw = _call_ollama(ollama_url, model, prompt, timeout=timeout, config=config)
             data = _parse_json_response(raw)
             if not data.get("roteiro"):
                 raise ValueError("Campo 'roteiro' ausente ou vazio no JSON.")
@@ -417,7 +394,7 @@ def generate_script(
             _log(log_cb, f"[Scriptwriter] Tentativa {attempt}/2 falhou ({exc}).")
 
     if data is None:
-        raise RuntimeError(f"Falha ao gerar roteiro via Ollama: {last_error}")
+        raise RuntimeError(f"Falha ao gerar roteiro ({provider_tag}): {last_error}")
 
     roteiro = _clean_script_text(str(data.get("roteiro", "")))
     wc = _count_words(roteiro)
@@ -434,7 +411,7 @@ def generate_script(
         try:
             data["roteiro"] = roteiro
             adj_prompt = _build_length_adjustment_prompt(data, wc, config)
-            adj_raw = _call_ollama(ollama_url, model, adj_prompt, timeout=timeout)
+            adj_raw = _call_ollama(ollama_url, model, adj_prompt, timeout=timeout, config=config)
             adj_data = _parse_json_response(adj_raw)
             adj_roteiro = _clean_script_text(str(adj_data.get("roteiro", "")))
             adj_wc = _count_words(adj_roteiro)

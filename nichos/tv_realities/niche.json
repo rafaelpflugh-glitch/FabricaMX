@@ -43,7 +43,7 @@
     "sombra": 3,
     "palavras_por_bloco": 3,
     "alinhamento": 2,
-    "margem_inferior": 395
+    "margem_inferior": 330
   },
   "imagem_ancoras": ["masterchef", "jacquin", "cozinha", "restaurante", "chef", "prato"],
   "imagem_sufixo_padrao": "MasterChef Brasil Erick Jacquin programa TV",
