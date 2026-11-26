@@ -336,12 +336,15 @@ def fetch_transcript_cues(
     preferred_langs: tuple[str, ...] = ("pt", "pt-BR", "en", "es"),
     log_cb: LogCallback | None = None,
 ) -> list[TranscriptCue]:
-    """Baixa a transcrição com timestamps do YouTube via yt-dlp (json3 ou vtt)."""
+    """Baixa a transcrição com timestamps do YouTube via yt-dlp (json3 ou vtt), suportando en-orig / pt-BR / etc."""
     ytdlp = _find_ytdlp()
     sub_dir = work_dir / "yt_subs"
     sub_dir.mkdir(parents=True, exist_ok=True)
-    lang_str = ",".join(preferred_langs)
+    # Limpa arquivos antigos de tentativa anterior
+    for old in sub_dir.glob("*"):
+        old.unlink(missing_ok=True)
 
+    lang_regex = "pt.*,pt,en.*,en,es.*,es"
     _log(log_cb, "[YouTube] Baixando transcrição com timestamps exatos...")
     for sub_fmt in ("json3", "vtt"):
         cmd = [
@@ -353,7 +356,7 @@ def fetch_transcript_cues(
             "--write-sub",
             "--write-auto-sub",
             "--sub-langs",
-            lang_str,
+            lang_regex,
             "--sub-format",
             sub_fmt,
             "-o",
@@ -373,13 +376,16 @@ def fetch_transcript_cues(
 
         files = sorted(sub_dir.glob(f"*.{sub_fmt}"))
         if files:
-            # Prioriza idioma na ordem de preferred_langs
             chosen = files[0]
             for pref in preferred_langs:
+                pref_l = pref.lower()
                 for f in files:
-                    if f".{pref.lower()}." in f.name.lower():
+                    if f".{pref_l}." in f.name.lower() or f".{pref_l}-" in f.name.lower():
                         chosen = f
                         break
+                else:
+                    continue
+                break
             cues = _parse_json3_subtitles(chosen) if sub_fmt == "json3" else _parse_vtt_subtitles(chosen)
             if cues:
                 _log(log_cb, f"[YouTube] Transcrição carregada: {len(cues)} blocos temporais ({chosen.name}).")
@@ -477,14 +483,32 @@ def run_youtube_adapter_stage(
     idioma = str(config.get("idioma", "pt-BR"))
     pref_langs = ("pt", "pt-BR", "en", "es") if idioma.startswith("pt") else ("en", "es", "pt")
 
-    video = discover_youtube_candidate(
-        config=config,
-        mode="adaptador_yt",
-        exclude_urls=exclude_urls,
-        custom_url=custom_url,
-        log_cb=log_cb,
-    )
-    cues = fetch_transcript_cues(video.url, work_dir, preferred_langs=pref_langs, log_cb=log_cb)
+    tried_urls = set(exclude_urls or set())
+    video: YouTubeCandidate | None = None
+    cues: list[TranscriptCue] = []
+    last_err: Exception | None = None
+
+    for attempt in range(1, 4):
+        try:
+            video = discover_youtube_candidate(
+                config=config,
+                mode="adaptador_yt",
+                exclude_urls=tried_urls,
+                custom_url=custom_url if attempt == 1 else "",
+                log_cb=log_cb,
+            )
+            tried_urls.add(video.url)
+            cues = fetch_transcript_cues(video.url, work_dir, preferred_langs=pref_langs, log_cb=log_cb)
+            if cues:
+                break
+        except Exception as exc:
+            last_err = exc
+            if custom_url:
+                raise
+            _log(log_cb, f"[AdaptadorYT] Tentando próximo vídeo com transcrição ({attempt}/3)...")
+
+    if video is None or not cues:
+        raise RuntimeError(f"Não foi possível obter vídeo com transcrição: {last_err}")
     max_cue_t = cues[-1].end if cues else float(video.duration or 300)
     digest = _compress_transcript_digest(cues, block_seconds=12)
 
@@ -624,14 +648,32 @@ def run_original_cut_stage(
     idioma = str(config.get("idioma", "pt-BR"))
     pref_langs = ("pt", "pt-BR", "en", "es") if idioma.startswith("pt") else ("en", "es", "pt")
 
-    video = discover_youtube_candidate(
-        config=config,
-        mode="corte_original",
-        exclude_urls=exclude_urls,
-        custom_url=custom_url,
-        log_cb=log_cb,
-    )
-    cues = fetch_transcript_cues(video.url, work_dir, preferred_langs=pref_langs, log_cb=log_cb)
+    tried_urls = set(exclude_urls or set())
+    video: YouTubeCandidate | None = None
+    cues: list[TranscriptCue] = []
+    last_err: Exception | None = None
+
+    for attempt in range(1, 4):
+        try:
+            video = discover_youtube_candidate(
+                config=config,
+                mode="corte_original",
+                exclude_urls=tried_urls,
+                custom_url=custom_url if attempt == 1 else "",
+                log_cb=log_cb,
+            )
+            tried_urls.add(video.url)
+            cues = fetch_transcript_cues(video.url, work_dir, preferred_langs=pref_langs, log_cb=log_cb)
+            if cues:
+                break
+        except Exception as exc:
+            last_err = exc
+            if custom_url:
+                raise
+            _log(log_cb, f"[CortadorViral] Tentando próximo vídeo com transcrição ({attempt}/3)...")
+
+    if video is None or not cues:
+        raise RuntimeError(f"Não foi possível obter vídeo com transcrição: {last_err}")
     max_cue_t = cues[-1].end if cues else float(video.duration or 300)
     digest = _compress_transcript_digest(cues, block_seconds=12, max_chars=12000)
 
