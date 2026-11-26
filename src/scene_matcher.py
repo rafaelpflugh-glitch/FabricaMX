@@ -168,7 +168,7 @@ def index_video_pool(
     cache_path = broll_dir / "scene_index.json"
 
     use_gemini_vision = is_gemini_active(config)
-    vision_model = str(config.get("gemini_modelo") or "gemini-2.5-flash") if use_gemini_vision else find_vision_model(ollama_url)
+    vision_model = str(config.get("gemini_modelo") or "gemini-flash-lite-latest") if use_gemini_vision else find_vision_model(ollama_url)
     if not vision_model:
         _log(
             log_cb,
@@ -382,7 +382,7 @@ Responda APENAS com o JSON:"""
 
     selected_scenes: list[IndexedScene] = []
     try:
-        provider_lbl = config.get("gemini_modelo", "gemini-2.5-flash") if is_gemini_active(config) else text_model
+        provider_lbl = config.get("gemini_modelo", "gemini-flash-lite-latest") if is_gemini_active(config) else text_model
         _log(log_cb, f"[SceneMatcher] Sincronizando {num_scenes} trechos de fala com {len(indexed_scenes)} cenas via {provider_lbl}...")
         raw = generate_text_llm(prompt=prompt, config=config, expect_json=True, temperature=0.25, max_tokens=500, timeout=90)
         raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL | re.IGNORECASE).strip()

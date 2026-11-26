@@ -139,6 +139,8 @@ def _parse_json_response(raw: str) -> dict[str, Any]:
         data = json.loads(cleaned)
         if isinstance(data, dict):
             return data
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
     except json.JSONDecodeError:
         pass
 
@@ -149,7 +151,8 @@ def _parse_json_response(raw: str) -> dict[str, Any]:
         if isinstance(data, dict):
             return data
 
-    raise ValueError("A resposta do Ollama não contém um JSON válido.")
+    preview = cleaned[:240].replace("\n", " ")
+    raise ValueError(f"A resposta da IA não contém um JSON válido (trecho: {preview}).")
 
 
 def _clean_script_text(text: str) -> str:
@@ -366,7 +369,7 @@ def generate_script(
     """Gera roteiro viral de alta retenção via Gemini API ou Ollama local."""
     ollama_url = config.get("ollama_url", "http://localhost:11434")
     use_gemini = is_gemini_active(config)
-    model = config.get("gemini_modelo", "gemini-2.5-flash") if use_gemini else config.get("ollama_modelo", "qwen3:8b")
+    model = config.get("gemini_modelo", "gemini-flash-lite-latest") if use_gemini else config.get("ollama_modelo", "qwen3:8b")
     provider_tag = "Gemini API" if use_gemini else "Ollama Local"
     timeout = int(config.get("ollama_timeout", 180))
     niche_name = str(config.get("nicho_nome", "Fábrica TK"))

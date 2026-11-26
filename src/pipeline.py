@@ -42,7 +42,7 @@ class FabricaPipeline:
 
     STAGES = [
         "1/5 Coletando pauta",
-        "2/5 Roteiro Ollama",
+        "2/5 Roteiro IA",
         "3/5 Cenas/Imagens",
         "4/5 Voz/Legenda",
         "5/5 Render FFmpeg",

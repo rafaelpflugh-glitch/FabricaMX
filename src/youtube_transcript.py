@@ -528,9 +528,9 @@ TRANSCRIÇÃO COM TIMESTAMPS (em segundos):
 REGRAS ESTRITAS (OBRIGATÓRIAS):
 1. Idioma do roteiro, gancho e descrição: {lp['lang_name']}.
 2. Responda APENAS com um JSON válido com estas 6 chaves:
-   - "roteiro": string (OBRIGATÓRIO 175 a 200 palavras, frases curtas de impacto, sem saudações, com loop aberto no início, CTA no meio "{lp['cta']}" e pergunta provocativa no final)
+   - "roteiro": string (OBRIGATÓRIO 195 a 220 palavras para garantir 62 a 70 segundos de áudio a +12% de velocidade! Frases curtas de impacto, sem saudações, com loop aberto no início, CTA no meio "{lp['cta']}" apenas UMA vez, e pergunta provocativa no final)
    - "gancho_tela": string (3 a 5 palavras EM CAIXA ALTA)
-   - "segmentos_video": array de 14 a 18 números inteiros representando os SEGUNDOS EXATOS (timestamps do vídeo acima) em ordem cronológica que mostram exatamente o que cada parte do seu roteiro está explicando! (ex.: [18, 24, 31, 45, 52, ...], todos entre 5 e {max(20, int(max_cue_t - 8))})
+   - "segmentos_video": array de 14 a 18 números inteiros representando os SEGUNDOS EXATOS (timestamps do vídeo acima) em ordem cronológica concentrados no trecho principal escolhido (dentro de uma janela máxima de 3 minutos do vídeo) que mostram exatamente o que cada parte do seu roteiro está explicando! (ex.: [18, 24, 31, 45, 52, ...], todos entre 5 e {max(20, int(max_cue_t - 8))})
    - "descricao_tiktok": string (1 frase chamativa SEM hashtags)
    - "hashtags": array de 6 a 8 hashtags começando com #
    - "resumo_pauta": string (1 frase resumindo o trecho escolhido)
@@ -543,11 +543,11 @@ Retorne APENAS o JSON:"""
 
     roteiro = _clean_script_text(str(data.get("roteiro") or ""))
     wc = _count_words(roteiro)
-    if wc < 155:
-        _log(log_cb, f"[AdaptadorYT] Expandindo roteiro ({wc} -> alvo 175-198 palavras)...")
+    if wc < 185:
+        _log(log_cb, f"[AdaptadorYT] Expandindo roteiro ({wc} -> alvo 195-218 palavras para passar de 60s)...")
         exp_prompt = (
-            f"O campo 'roteiro' tem apenas {wc} palavras. Expanda para 178-198 palavras em {lp['lang_name']} "
-            f"usando mais detalhes reais da transcrição acima, mantendo frases curtas, SEM repetir o pedido de seguir mais de uma vez.\n"
+            f"O campo 'roteiro' tem apenas {wc} palavras (daria menos de 60 segundos). Expanda para 198-218 palavras em {lp['lang_name']} "
+            f"usando mais detalhes concretos e reações reais da transcrição acima, mantendo frases curtas e ritmo viral, SEM repetir o pedido de seguir mais de uma vez.\n"
             f"JSON ATUAL:\n{json.dumps(data, ensure_ascii=False)}\nResponda APENAS com o JSON corrigido:"
         )
         try:
@@ -582,9 +582,36 @@ Retorne APENAS o JSON:"""
     min_t = max(0.0, min(timestamps) - 2.0)
     max_t = min(max_cue_t, max(timestamps) + 8.0)
     if (max_t - min_t) > 240.0:
-        # Limita span máximo de download para 4 minutos mantendo o foco principal
-        max_t = min_t + 240.0
-        timestamps = [t for t in timestamps if t <= max_t - 5.0] or [min_t + i * 5.0 for i in range(16)]
+        # Escolhe a janela de 240s com maior densidade de timestamps escolhidos pela IA
+        best_win: list[float] = []
+        for t_anchor in timestamps:
+            win = [t for t in timestamps if t_anchor <= t <= t_anchor + 230.0]
+            if len(win) > len(best_win):
+                best_win = win
+        if best_win:
+            timestamps = best_win
+            min_t = max(0.0, min(timestamps) - 2.0)
+            max_t = min(max_cue_t, max(timestamps) + 12.0)
+        else:
+            max_t = min_t + 240.0
+            timestamps = [t for t in timestamps if t <= max_t - 5.0]
+
+    # Garante cortes dinâmicos (14-16 cenas de ~4s) preenchendo sub-cortes em torno dos timestamps escolhidos
+    if len(timestamps) < 12:
+        expanded_ts: list[float] = []
+        for idx_t, t_val in enumerate(timestamps):
+            expanded_ts.append(t_val)
+            next_t = timestamps[idx_t + 1] if idx_t + 1 < len(timestamps) else min(max_t - 5.0, t_val + 12.0)
+            gap = next_t - t_val
+            if gap >= 8.0:
+                expanded_ts.append(round(t_val + min(4.5, gap / 2.0), 2))
+        while len(expanded_ts) < 14:
+            last_t = expanded_ts[-1] if expanded_ts else min_t + 4.0
+            cand = round(last_t + 4.5, 2)
+            if cand > max_t - 5.0:
+                break
+            expanded_ts.append(cand)
+        timestamps = sorted(set(expanded_ts))[:16]
 
     src_video = work_dir / "adapted_source.mp4"
     sec_str = f"*{min_t:.1f}-{max_t:.1f}" if (video.duration > 260 or min_t > 10.0) else None

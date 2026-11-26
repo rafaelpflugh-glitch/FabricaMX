@@ -1,8 +1,8 @@
 {
   "nicho_ativo": "gta_vi",
   "modo_conteudo": "adaptador_yt",
-  "provedor_ia": "ollama",
-  "gemini_modelo": "gemini-2.5-flash",
+  "provedor_ia": "gemini",
+  "gemini_modelo": "gemini-flash-lite-latest",
   "ollama_url": "http://localhost:11434",
   "ollama_modelo": "qwen3:8b",
   "ollama_timeout": 180,

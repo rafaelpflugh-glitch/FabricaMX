@@ -101,7 +101,8 @@ def download_video_hd(
         str(output_path),
     ]
     if section:
-        cmd.extend(["--download-sections", section, "--force-keyframes-at-cuts"])
+        # Sem --force-keyframes-at-cuts para fazer stream-copy ultrarrápido (em vez de re-encodar 1080p)
+        cmd.extend(["--download-sections", section])
     cmd.append(url_or_query)
 
     try:
