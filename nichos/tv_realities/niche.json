@@ -1,0 +1,74 @@
+{
+  "id": "tv_realities",
+  "nome": "TV & Realities (MasterChef / Pesadelo)",
+  "etiqueta": "TV & REALITY • 9:16",
+  "modo_padrao": "corte_original",
+  "idioma_padrao": "pt-BR",
+  "vozes": [
+    { "id": "pt-BR-AntonioNeural", "label": "PT-BR • Antonio (Masculino)", "idioma": "pt-BR" },
+    { "id": "pt-BR-FranciscaNeural", "label": "PT-BR • Francisca (Feminino)", "idioma": "pt-BR" }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "Pesadelo na Cozinha",
+  "presets_foco": {
+    "Pesadelo na Cozinha": ["Pesadelo na Cozinha", "Erick Jacquin", "Jacquin", "restaurante", "cozinha"],
+    "MasterChef Brasil": ["MasterChef Brasil", "MasterChef", "Fogaça", "Helena Rizzo", "Jacquin", "eliminação"],
+    "Realities Geral": ["Pesadelo na Cozinha", "MasterChef Brasil", "Jacquin", "Fogaça", "reality"]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "MasterChef Brasil Pesadelo na Cozinha Jacquin",
+  "rss_feeds": [
+    {
+      "nome": "Google News MasterChef & Pesadelo",
+      "url": "https://news.google.com/rss/search?q=(%22MasterChef+Brasil%22+OR+%22Pesadelo+na+Cozinha%22+OR+%22Erick+Jacquin%22)+when:14d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    }
+  ],
+  "canais_adaptador": [
+    { "nome": "Pesadelo na Cozinha Oficial", "channel_id": "UCp7tUxXfE9jUtkMLGCzeXqA" },
+    { "nome": "MasterChef Brasil Oficial", "channel_id": "UC2EWGw-KBjEReUbXMJEiaCA" }
+  ],
+  "canais_corte": [
+    { "nome": "Pesadelo na Cozinha Oficial", "channel_id": "UCp7tUxXfE9jUtkMLGCzeXqA" },
+    { "nome": "MasterChef Brasil Oficial", "channel_id": "UC2EWGw-KBjEReUbXMJEiaCA" }
+  ],
+  "yt_busca_adaptador": "Pesadelo na Cozinha Erick Jacquin melhores momentos",
+  "yt_busca_corte": "Pesadelo na Cozinha Jacquin briga cozinha episodio",
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 82,
+    "cor_ativa": "#FACC15",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 10,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 2,
+    "margem_inferior": 395
+  },
+  "imagem_ancoras": ["masterchef", "jacquin", "cozinha", "restaurante", "chef", "prato"],
+  "imagem_sufixo_padrao": "MasterChef Brasil Erick Jacquin programa TV",
+  "imagem_fallbacks": [
+    "Erick Jacquin Pesadelo na Cozinha Band",
+    "MasterChef Brasil jurados cozinha Band",
+    "Henrique Fogaca MasterChef Brasil prato"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é um editor viral especializado em cortes explosivos de TV e realities gastronômicos (Pesadelo na Cozinha com Erick Jacquin e MasterChef Brasil). Encontre brigas intensas, broncas icônicas, reviravoltas e momentos hilários.",
+    "regras_fatos": "Use apenas o que realmente acontece no episódio/vídeo original.",
+    "cta_meio_pt": "Mas antes de ver a reação final do chef, já me segue porque aqui saem os melhores momentos todo dia.",
+    "hashtags_padrao": ["#PesadeloNaCozinha", "#MasterChefBrasil", "#ErickJacquin", "#CortesTV", "#ViralBR", "#TikTokBrasil"]
+  },
+  "top5_banco": [
+    {
+      "slug": "top5_maiores_broncas_erick_jacquin",
+      "tema": "5 momentos em que Erick Jacquin perdeu totalmente a paciência na cozinha",
+      "foco": "Compilado de bastidores e frases icônicas de Erick Jacquin no Pesadelo na Cozinha e MasterChef Brasil, como o lendário freezer desligado à noite e a vergonha da profissão.",
+      "queries": [
+        "Erick Jacquin Pesadelo na Cozinha bronca Band",
+        "Erick Jacquin MasterChef Brasil cozinha",
+        "cozinha restaurante caotica Pesadelo na Cozinha",
+        "MasterChef Brasil eliminacao jurados Band"
+      ]
+    }
+  ]
+}

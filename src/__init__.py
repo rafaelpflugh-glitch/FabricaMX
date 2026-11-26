@@ -143,6 +143,11 @@ def build_runtime_config(
     merged["imagem_fallbacks"] = niche.get("imagem_fallbacks", [])
     merged["prompt_contexto"] = niche.get("prompt_contexto", {})
     merged["top5_banco"] = niche.get("top5_banco", [])
+    merged["modo_padrao_nicho"] = niche.get("modo_padrao", merged.get("modo_conteudo", "noticia"))
+    merged["canais_adaptador"] = niche.get("canais_adaptador", [])
+    merged["canais_corte"] = niche.get("canais_corte", [])
+    merged["yt_busca_adaptador"] = niche.get("yt_busca_adaptador", "")
+    merged["yt_busca_corte"] = niche.get("yt_busca_corte", "")
     merged["paths"] = {k: str(v) for k, v in niche_paths.items()}
     return merged
 

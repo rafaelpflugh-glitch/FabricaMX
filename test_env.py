@@ -33,6 +33,7 @@ INTERNAL_MODULES = [
     "src.media_fetcher",
     "src.video_fetcher",
     "src.scene_matcher",
+    "src.youtube_transcript",
     "src.tts_subtitles",
     "src.video_engine",
     "src.pipeline",

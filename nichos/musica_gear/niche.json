@@ -1,0 +1,106 @@
+{
+  "id": "musica_gear",
+  "nome": "Música, Pedais & Bandas",
+  "etiqueta": "MÚSICA & GEAR • 9:16",
+  "modo_padrao": "adaptador_yt",
+  "idioma_padrao": "pt-BR",
+  "vozes": [
+    { "id": "pt-BR-AntonioNeural", "label": "PT-BR • Antonio (Masculino)", "idioma": "pt-BR" },
+    { "id": "pt-BR-FranciscaNeural", "label": "PT-BR • Francisca (Feminino)", "idioma": "pt-BR" },
+    { "id": "en-US-AndrewNeural", "label": "EN-US • Andrew (RPM Dólar)", "idioma": "en-US" },
+    { "id": "en-US-GuyNeural", "label": "EN-US • Guy (Energetic)", "idioma": "en-US" },
+    { "id": "es-MX-JorgeNeural", "label": "ES-MX • Jorge (LATAM)", "idioma": "es-MX" }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "Guitarras & Pedais",
+  "presets_foco": {
+    "Guitarras & Pedais": ["guitarra", "pedal", "pedais", "guitar", "pedalboard", "tone", "amp", "Rig Rundown"],
+    "Bandas & Lendas do Rock": ["rock", "banda", "Pink Floyd", "Nirvana", "Metallica", "Led Zeppelin", "Jack White", "Slash"],
+    "Segredos de Estúdio": ["estúdio", "gravação", "timbre", "recording", "riff", "album", "produtor"]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "guitarra pedais rock musica noticias",
+  "rss_feeds": [
+    {
+      "nome": "Guitar World",
+      "url": "https://www.guitarworld.com/feeds/all"
+    },
+    {
+      "nome": "Tenho Mais Discos Que Amigos",
+      "url": "https://www.tenhomaisdiscosqueamigos.com/feed/"
+    },
+    {
+      "nome": "Google News Guitarras & Rock (BR)",
+      "url": "https://news.google.com/rss/search?q=(guitarra+OR+pedais+OR+banda+rock)+musica+when:7d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    }
+  ],
+  "canais_adaptador": [
+    { "nome": "Premier Guitar (Rig Rundown)", "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ" },
+    { "nome": "Rick Beato", "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q" }
+  ],
+  "canais_corte": [
+    { "nome": "Premier Guitar (Rig Rundown)", "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ" },
+    { "nome": "Rick Beato", "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q" }
+  ],
+  "yt_busca_adaptador": "famous guitar tone cheap gear pedals rig rundown",
+  "yt_busca_corte": "guitar pedals famous tone studio secret",
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 82,
+    "cor_ativa": "#F59E0B",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 10,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 2,
+    "margem_inferior": 395
+  },
+  "imagem_ancoras": ["guitar", "guitarra", "pedal", "pedalboard", "amplifier", "band", "rock", "concert", "studio"],
+  "imagem_sufixo_padrao": "electric guitar pedals rock musician live stage",
+  "imagem_fallbacks": [
+    "electric guitar pedalboard stage rock concert live",
+    "Jack White electric guitar live stage performance",
+    "vintage guitar effects pedals closeup studio",
+    "rock guitarist solo live concert stage lights",
+    "recording studio guitar amplifier microphone vintage"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é um criador viral de TikTok especialista em guitarras, pedais, timbres lendários e bastidores de bandas famosas (estilo StudioLeak e Rig Rundown), ritmo ágil, curioso e viciante.",
+    "persona_en": "You are a viral TikTok music gear creator uncovering mind-blowing guitar tone secrets, pedals, and legendary band stories (StudioLeak / Rig Rundown style). Punchy, fast, zero fluff.",
+    "persona_es": "Eres un creador viral de TikTok experto en guitarras, pedales, tonos legendarios e historias ocultas de bandas famosas.",
+    "regras_fatos": "Cite nomes reais de guitarras, pedais, amplificadores e músicos. Nunca invente modelos de equipamentos que não estejam na fonte.",
+    "cta_meio_pt": "Mas antes de ouvir o segredo mais absurdo do final, já me segue porque aqui sai todo dia bastidor de música e guitarra.",
+    "cta_meio_en": "Before I reveal the craziest gear secret at the end, hit follow for daily guitar and music stories.",
+    "cta_meio_es": "Pero antes del secreto más loco del final, sígueme porque aquí salen historias de guitarras y bandas todos los días.",
+    "hashtags_padrao": ["#Guitarra", "#PedaisDeGuitarra", "#Rock", "#Musica", "#GuitarGear", "#TikTokMusica"]
+  },
+  "top5_banco": [
+    {
+      "slug": "top5_equipamentos_baratos_timbres_lendarios",
+      "tema": "5 equipamentos baratos que gravaram alguns dos maiores clássicos do rock",
+      "foco": "Posição 5: Kurt Cobain gravou grande parte do Nevermind usando um pedal Boss DS-1 barato de distorção que qualquer iniciante pode comprar. Posição 4: Jack White criou o som icônico de Seven Nation Army com uma guitarra Kay antiga de loja de usados e um pedal Digitech Whammy. Posição 3: Jimmy Page gravou o solo lendário de Stairway to Heaven usando uma Telecaster e um amplificador pequeno Supro de estúdio. Posição 2: Brian May construiu sua própria guitarra Red Special em casa com o pai usando madeira de uma lareira velha e toca com uma moeda no lugar da palheta. Posição 1: Eddie Van Halen montou a lendária Frankenstrat com peças avulsas de segunda mão por menos de 150 dólares e revolucionou a guitarra para sempre.",
+      "queries": [
+        "Boss DS-1 guitar pedal Kurt Cobain Nirvana live",
+        "Jack White playing guitar live stage red",
+        "Jimmy Page Led Zeppelin guitar live concert",
+        "Brian May Queen Red Special guitar live",
+        "Eddie Van Halen Frankenstrat guitar solo live",
+        "vintage guitar pedals amplifier recording studio"
+      ]
+    },
+    {
+      "slug": "top5_pedais_mais_iconicos_historia_rock",
+      "tema": "5 pedais de guitarra que mudaram a história da música para sempre",
+      "foco": "Posição 5: Digitech Whammy, a arma secreta de Tom Morello no Rage Against the Machine e de Jack White em Seven Nation Army. Posição 4: Ibanez Tube Screamer TS808, o overdrive verde lendário que definiu o timbre rasgado de Stevie Ray Vaughan. Posição 3: Electro-Harmonix Big Muff, o fuzz gigante por trás dos solos espaciais de David Gilmour no Pink Floyd e do Smashing Pumpkins. Posição 2: Cry Baby Wah, o pedal de expressão imortalizado por Jimi Hendrix em Voodoo Child e por Slash no Guns N' Roses. Posição 1: Boss DS-1 e Fuzz Face, os dois pedais que moldaram o som cru do rock clássico ao grunge nos últimos cinquenta anos.",
+      "queries": [
+        "Tom Morello guitar live stage pedalboard",
+        "Stevie Ray Vaughan guitar live blues stage",
+        "David Gilmour Pink Floyd guitar solo concert",
+        "Jimi Hendrix playing electric guitar live stage",
+        "Slash Guns N Roses guitar solo live concert",
+        "guitar pedalboard effects pedals stage closeup"
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@
   "id": "futebol_mexicano",
   "nome": "Futebol Mexicano (Liga MX)",
   "etiqueta": "LIGA MX • 9:16",
+  "modo_padrao": "noticia",
   "idioma_padrao": "es-MX",
   "vozes": [
     { "id": "es-MX-JorgeNeural", "label": "ES-MX • Jorge (Masculino)", "idioma": "es-MX" },
@@ -28,6 +29,14 @@
       "url": "https://news.google.com/rss/search?q=Liga+MX+futbol+when:4d&hl=es-419&gl=MX&ceid=MX:es-419"
     }
   ],
+  "canais_adaptador": [
+    { "nome": "TUDN México", "channel_id": "UCTIyEyDNHPrwVFPhpi5dm0A" }
+  ],
+  "canais_corte": [
+    { "nome": "TUDN México", "channel_id": "UCTIyEyDNHPrwVFPhpi5dm0A" }
+  ],
+  "yt_busca_adaptador": "Club America Liga MX goles resumen TUDN",
+  "yt_busca_corte": "Club America Liga MX goles resumen polemica",
   "legenda": {
     "fonte": "Impact",
     "tamanho_fonte": 82,

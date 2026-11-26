@@ -14,9 +14,10 @@ from src.media_fetcher import fetch_and_prepare_images
 from src.scene_matcher import index_video_pool, match_scenes_to_narration
 from src.scraper import NewsArticle, fetch_next_news
 from src.scriptwriter import ScriptPackage, generate_script, pick_next_top5_topic
-from src.tts_subtitles import generate_narration_and_subtitles
-from src.video_engine import render_video
+from src.tts_subtitles import build_tiktok_ass, generate_narration_and_subtitles
+from src.video_engine import render_original_cut_video, render_video
 from src.video_fetcher import ensure_broll_videos
+from src.youtube_transcript import run_original_cut_stage, run_youtube_adapter_stage
 
 LogCallback = Callable[[str], None]
 ProgressCallback = Callable[[int, int, str, float], None]
@@ -115,10 +116,150 @@ class FabricaPipeline:
         script: ScriptPackage | None = None
 
         try:
+            modo = str(self.config.get("modo_conteudo", "noticia")).strip().lower()
+            custom_video_url = str(self.config.get("video_url_opcional") or "").strip()
+            placar_texto = str(self.config.get("placar_opcional") or "").strip()
+
+            # ==================== MODO CORTADOR VIRAL (ÁUDIO ORIGINAL) ====================
+            if modo == "corte_original":
+                self._check_cancelled()
+                self._progress(1, f"{prefix}1/5 Buscando vídeo YouTube", 0.08)
+                self._log(f"{prefix}Modo Cortador Viral (Áudio Original) [{niche_name}]...")
+                cut_plan = run_original_cut_stage(
+                    config=self.config,
+                    work_dir=job_dir,
+                    exclude_urls=exclude_urls,
+                    custom_url=custom_video_url,
+                    log_cb=self._log,
+                )
+                article = cut_plan.article
+                script = ScriptPackage(
+                    roteiro=cut_plan.transcript_excerpt,
+                    gancho_tela=cut_plan.gancho_tela,
+                    descricao_tiktok=cut_plan.descricao_tiktok,
+                    hashtags=cut_plan.hashtags,
+                    word_count=len(cut_plan.word_timings),
+                )
+                if self.on_preview:
+                    self.on_preview(article, script)
+                self._progress(3, f"{prefix}3/5 Gerando legendas .ass", 0.58)
+
+                ass_path = job_dir / "cut_subtitles.ass"
+                build_tiktok_ass(cut_plan.word_timings, ass_path, self.config)
+                self._log(f"{prefix}[CortadorViral] Legendas sincronizadas com {len(cut_plan.word_timings)} palavras originais.")
+                self._progress(5, f"{prefix}5/5 Render FFmpeg", 0.72)
+
+                def _on_cut_pct(ratio: float) -> None:
+                    self._progress(5, f"{prefix}5/5 Render FFmpeg ({int(ratio * 100)}%)", 0.72 + 0.28 * ratio)
+
+                mp4_path, txt_path = render_original_cut_video(
+                    clip_path=cut_plan.clip_path,
+                    ass_path=ass_path,
+                    clip_duration=cut_plan.clip_duration,
+                    gancho_tela=cut_plan.gancho_tela,
+                    article_title=article.title,
+                    article_source=article.source,
+                    article_url=article.url,
+                    descricao_tiktok=cut_plan.descricao_tiktok,
+                    hashtags=cut_plan.hashtags,
+                    transcript_excerpt=cut_plan.transcript_excerpt,
+                    work_dir=job_dir,
+                    config=self.config,
+                    log_cb=self._log,
+                    progress_cb=_on_cut_pct,
+                    stop_event=self.stop_event,
+                )
+
+                if mp4_path.exists() and mp4_path.stat().st_size > 10_000:
+                    append_history(
+                        url=article.url,
+                        title=article.title,
+                        source=article.source,
+                        output_file=mp4_path.name,
+                        history_path=history_path,
+                    )
+                self._progress(5, f"{prefix}Concluído!", 1.0)
+                return BatchItemResult(
+                    index=batch_index,
+                    success=True,
+                    article=article,
+                    script=script,
+                    mp4_path=mp4_path,
+                    txt_path=txt_path,
+                )
+
+            # ==================== MODO ADAPTADOR YOUTUBE (TIMESTAMPS EXATOS) ====================
+            if modo == "adaptador_yt":
+                self._check_cancelled()
+                self._progress(1, f"{prefix}1/5 Transcrição YouTube", 0.08)
+                self._log(f"{prefix}Modo Adaptador YouTube (Sincronia Exata) [{niche_name}]...")
+                adapted = run_youtube_adapter_stage(
+                    config=self.config,
+                    work_dir=job_dir,
+                    exclude_urls=exclude_urls,
+                    custom_url=custom_video_url,
+                    log_cb=self._log,
+                )
+                article = adapted.article
+                script = adapted.script
+                if self.on_preview:
+                    self.on_preview(article, script)
+                self._progress(3, f"{prefix}3/5 Voz/Legenda", 0.50)
+
+                tts_result = generate_narration_and_subtitles(
+                    script_text=script.roteiro,
+                    work_dir=job_dir,
+                    config=self.config,
+                    log_cb=self._log,
+                )
+                self._progress(5, f"{prefix}5/5 Render FFmpeg", 0.74)
+
+                def _on_adp_pct(ratio: float) -> None:
+                    self._progress(5, f"{prefix}5/5 Render FFmpeg ({int(ratio * 100)}%)", 0.74 + 0.26 * ratio)
+
+                mp4_path, txt_path = render_video(
+                    image_paths=[],
+                    audio_path=tts_result.audio_path,
+                    ass_path=tts_result.ass_path,
+                    audio_duration=tts_result.duration,
+                    gancho_tela=script.gancho_tela,
+                    article_title=article.title,
+                    article_source=article.source,
+                    article_url=article.url,
+                    descricao_tiktok=script.descricao_tiktok,
+                    hashtags=script.hashtags,
+                    roteiro=script.roteiro,
+                    work_dir=job_dir,
+                    config=self.config,
+                    broll_videos=[adapted.source_video_path],
+                    matched_scenes=adapted.matched_scenes,
+                    placar_texto=placar_texto,
+                    log_cb=self._log,
+                    progress_cb=_on_adp_pct,
+                    stop_event=self.stop_event,
+                )
+                if mp4_path.exists() and mp4_path.stat().st_size > 10_000:
+                    append_history(
+                        url=article.url,
+                        title=article.title,
+                        source=article.source,
+                        output_file=mp4_path.name,
+                        history_path=history_path,
+                    )
+                self._progress(5, f"{prefix}Concluído!", 1.0)
+                return BatchItemResult(
+                    index=batch_index,
+                    success=True,
+                    article=article,
+                    script=script,
+                    mp4_path=mp4_path,
+                    txt_path=txt_path,
+                )
+
+            # ==================== MODOS NOTÍCIA VIRAL / TOP 5 ====================
             # Etapa 1/5: Pauta (Top 5 Viral ou Notícia Quente do nicho)
             self._check_cancelled()
             self._progress(1, f"{prefix}{self.STAGES[0]}", 0.05)
-            modo = str(self.config.get("modo_conteudo", "top5")).strip().lower()
             if modo == "top5":
                 self._log(f"{prefix}Etapa 1/5 [{niche_name}]: Selecionando tema Top 5 Viral...")
                 article = pick_next_top5_topic(config=self.config, exclude_urls=exclude_urls)

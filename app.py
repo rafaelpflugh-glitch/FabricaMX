@@ -42,8 +42,10 @@ ACCENT_DANGER_HOVER = "#DC2626"
 ACCENT_GREEN = "#22C55E"
 
 MODE_LABELS = {
+    "adaptador_yt": "Adaptador YouTube (IGN / Gameranx / Rig)",
+    "corte_original": "Cortador Viral (Áudio Original • TV / Streamer)",
+    "noticia": "Notícia Quente (Portais + IA Visão)",
     "top5": "Top 5 / Segredos Virais",
-    "noticia": "Notícia / Rumor Viral",
 }
 LABEL_TO_MODE = {v: k for k, v in MODE_LABELS.items()}
 
@@ -619,8 +621,8 @@ class FabricaTKApp(ctk.CTk):
         self.runtime_cfg = build_runtime_config(self.global_cfg, niche_id)
 
         self.niche_badge.configure(text=self.runtime_cfg.get("nicho_etiqueta", f"{niche_id.upper()} • 9:16"))
-        modo = str(self.global_cfg.get("modo_conteudo", "top5")).strip().lower()
-        self.mode_var.set(MODE_LABELS.get(modo, MODE_LABELS["top5"]))
+        modo = str(self.runtime_cfg.get("modo_padrao_nicho") or self.global_cfg.get("modo_conteudo", "adaptador_yt")).strip().lower()
+        self.mode_var.set(MODE_LABELS.get(modo, MODE_LABELS["adaptador_yt"]))
 
         presets = self.runtime_cfg.get("presets_foco") or {}
         preset_keys = list(presets.keys()) or [self.runtime_cfg.get("nicho_nome", "Geral")]

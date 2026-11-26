@@ -802,3 +802,191 @@ def render_video(
         f"[VideoEngine] Vídeo HD concluído! {output_mp4.name} ({size_mb:.1f} MB) + {output_txt.name}",
     )
     return output_mp4, output_txt
+
+
+def render_original_cut_video(
+    clip_path: Path,
+    ass_path: Path,
+    clip_duration: float,
+    gancho_tela: str,
+    article_title: str,
+    article_source: str,
+    article_url: str,
+    descricao_tiktok: str,
+    hashtags: list[str],
+    transcript_excerpt: str,
+    work_dir: Path,
+    config: dict[str, Any],
+    log_cb: LogCallback | None = None,
+    progress_cb: ProgressCallback | None = None,
+    stop_event: threading.Event | None = None,
+) -> tuple[Path, Path]:
+    """
+    Renderiza o Modo Cortador Viral (Áudio Original + Legenda — Alanzoka, MasterChef, Pesadelo):
+    - Mantém 100% do áudio original do streamer/programa normalizado (loudnorm)
+    - Viewport 1080x1080 nítido (zero zoom exagerado) sobre fundo atmosférico borrado
+    - Card de gancho chamativo no topo (visível durante todo o corte para prender atenção!)
+    - Legendas .ass sincronizadas com a fala original logo abaixo do viewport
+    """
+    video_cfg = config.get("video", {})
+    width = int(video_cfg.get("largura", 1080))
+    height = int(video_cfg.get("altura", 1920))
+    fps = int(video_cfg.get("fps", 30))
+
+    niche_id = str(config.get("nicho_ativo", "tv_realities"))
+    niche_name = str(config.get("nicho_nome", "Fábrica TK"))
+    paths_dict = config.get("paths") or {}
+    output_dir = Path(paths_dict["output_dir"]) if paths_dict.get("output_dir") else OUTPUT_DIR
+    brand_dirs = [Path(paths_dict["branding_dir"]), BRANDING_DIR] if paths_dict.get("branding_dir") else [BRANDING_DIR]
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Banner chamativo no topo (estilo cortes virais de MasterChef / Alanzoka)
+    banner_png = work_dir / "cut_hook_banner.png"
+    accent_map = {
+        "gta_vi": (255, 46, 209),
+        "musica_gear": (245, 158, 11),
+        "tv_realities": (250, 204, 21),
+    }
+    create_hook_banner_png(
+        hook_text=gancho_tela,
+        output_path=banner_png,
+        club_label=niche_name,
+        accent_rgb=accent_map.get(niche_id, (250, 204, 21)),
+        width=width,
+        height=height,
+    )
+
+    branding_path = _pick_random_asset(brand_dirs, (".png",))
+
+    inputs = ["-i", str(clip_path), "-i", str(banner_png)]
+    branding_idx: int | None = None
+    if branding_path:
+        inputs.extend(["-i", str(branding_path)])
+        branding_idx = 2
+
+    vp_y = 360
+    escaped_ass = escape_ffmpeg_filter_path(ass_path)
+    filter_lines = [
+        f"[0:v]fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw][fraw]",
+        f"[braw]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
+        f"boxblur=8:2,scale={width}:{height}:flags=bilinear,eq=brightness=-0.32:saturation=1.18[bg]",
+        f"[fraw]scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
+        f"crop={width}:{width},eq=contrast=1.05:saturation=1.06[fg]",
+        f"[bg][fg]overlay=0:{vp_y},"
+        f"drawbox=x=0:y={vp_y - 3}:w={width}:h=3:color=white@0.28:t=fill,"
+        f"drawbox=x=0:y={vp_y + width}:w={width}:h=3:color=white@0.28:t=fill[v_base]",
+        "[v_base][1:v]overlay=0:0[v_bn]",
+    ]
+    cur_v = "v_bn"
+    if branding_idx is not None:
+        filter_lines.append(f"[{branding_idx}:v]scale=150:-1,format=rgba,colorchannelmixer=aa=0.80[wm]")
+        filter_lines.append(f"[{cur_v}][wm]overlay=W-w-36:48[v_wm]")
+        cur_v = "v_wm"
+
+    filter_lines.append(f"[{cur_v}]ass=filename='{escaped_ass}',format=yuv420p[vout]")
+    filter_lines.append("[0:a]loudnorm=I=-15:TP=-1.5:LRA=11,alimiter=limit=0.95[aout]")
+
+    filter_script_path = work_dir / "filter_cut.txt"
+    filter_script_path.write_text(";\n".join(filter_lines), encoding="utf-8")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_slug = slugify(gancho_tela or article_title, max_length=42)
+    output_mp4 = output_dir / f"{timestamp}_corte_{base_slug}.mp4"
+    output_txt = output_dir / f"{timestamp}_corte_{base_slug}.txt"
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        *inputs,
+        "-/filter_complex",
+        str(filter_script_path),
+        "-map",
+        "[vout]",
+        "-map",
+        "[aout]",
+        "-t",
+        f"{max(5.0, clip_duration):.3f}",
+        "-r",
+        str(fps),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ar",
+        "44100",
+        "-movflags",
+        "+faststart",
+        str(output_mp4),
+    ]
+
+    _log(log_cb, f"[VideoEngine] Renderizando Corte Viral HD (áudio original) -> {output_mp4.name}")
+
+    stderr_tail: list[str] = []
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    assert proc.stderr is not None
+    try:
+        for line in proc.stderr:
+            if stop_event and stop_event.is_set():
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                raise RuntimeError("Renderização cancelada pelo usuário.")
+            stripped = line.strip()
+            if stripped:
+                stderr_tail.append(stripped)
+                if len(stderr_tail) > 25:
+                    stderr_tail.pop(0)
+            cur_time = _parse_ffmpeg_time(stripped)
+            if cur_time is not None and progress_cb and clip_duration > 0:
+                progress_cb(max(0.0, min(1.0, cur_time / clip_duration)))
+        ret = proc.wait()
+    except Exception:
+        if proc.poll() is None:
+            proc.kill()
+        raise
+    finally:
+        if proc.stdout:
+            proc.stdout.close()
+        if proc.stderr:
+            proc.stderr.close()
+
+    if ret != 0 or not output_mp4.exists() or output_mp4.stat().st_size < 10_000:
+        raise RuntimeError(f"FFmpeg falhou no corte viral (código {ret}):\n" + "\n".join(stderr_tail[-12:]))
+
+    save_post_metadata_txt(
+        txt_path=output_txt,
+        title=article_title,
+        source=article_source,
+        url=article_url,
+        gancho_tela=gancho_tela,
+        descricao_tiktok=descricao_tiktok,
+        hashtags=hashtags,
+        roteiro=transcript_excerpt,
+    )
+    if progress_cb:
+        progress_cb(1.0)
+
+    size_mb = output_mp4.stat().st_size / (1024 * 1024)
+    _log(log_cb, f"[VideoEngine] Corte Viral concluído! {output_mp4.name} ({size_mb:.1f} MB) + {output_txt.name}")
+    return output_mp4, output_txt

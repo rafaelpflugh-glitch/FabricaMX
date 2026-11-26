@@ -2,6 +2,7 @@
   "id": "gta_vi",
   "nome": "GTA VI",
   "etiqueta": "GTA VI • 9:16",
+  "modo_padrao": "adaptador_yt",
   "idioma_padrao": "pt-BR",
   "vozes": [
     { "id": "pt-BR-AntonioNeural", "label": "PT-BR • Antonio (Masculino)", "idioma": "pt-BR" },
@@ -46,6 +47,17 @@
       "url": "https://feeds.feedburner.com/ign/all"
     }
   ],
+  "canais_adaptador": [
+    { "nome": "gameranx", "channel_id": "UCNvzD7Z-g64bPXxGzaQaa4g" },
+    { "nome": "IGN", "channel_id": "UCKy1dAqELo0zrOtPkf0eTMw" },
+    { "nome": "Gigaton Games", "channel_id": "UCAjKLSz8h3XJM5CSJWvmoNA" }
+  ],
+  "canais_corte": [
+    { "nome": "Alanzoka", "channel_id": "UCIwspRtKNszHhIhl36gREjQ" },
+    { "nome": "Gigaton Games", "channel_id": "UCAjKLSz8h3XJM5CSJWvmoNA" }
+  ],
+  "yt_busca_adaptador": "GTA 6 things details secrets gameranx IGN",
+  "yt_busca_corte": "GTA 6 gameplay momentos engraçados alanzoka",
   "legenda": {
     "fonte": "Impact",
     "tamanho_fonte": 82,
