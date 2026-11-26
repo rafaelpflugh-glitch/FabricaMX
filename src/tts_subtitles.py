@@ -32,6 +32,7 @@ class TTSResult:
     ass_path: Path
     duration: float
     word_count: int
+    word_timings: list[WordTiming]
 
 
 def _log(log_cb: LogCallback | None, msg: str) -> None:
@@ -380,4 +381,5 @@ def generate_narration_and_subtitles(
         ass_path=ass_path,
         duration=duration,
         word_count=len(word_timings),
+        word_timings=word_timings,
     )

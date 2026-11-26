@@ -386,6 +386,7 @@ def render_video(
     work_dir: Path,
     config: dict[str, Any],
     broll_videos: list[Path] | None = None,
+    matched_scenes: list[tuple[Path, float, int, int]] | None = None,
     placar_texto: str = "",
     log_cb: LogCallback | None = None,
     progress_cb: ProgressCallback | None = None,
@@ -477,10 +478,11 @@ def render_video(
         create_scoreboard_png(placar_texto.strip(), scoreboard_png, width=width, height=height)
         _log(log_cb, f"[VideoEngine] Placar em tela: '{placar_texto.strip()}'")
 
-    # 6) Monta lista de cenas (prioridade 100% VÍDEO REAL HD -> fallback fotos HD)
+    # 6) Monta lista de cenas (prioridade: cenas sincronizadas semanticamente -> B-Roll distribuído -> fallback fotos HD)
     scenes: list[dict[str, Any]] = []
     video_list = list(broll_videos or [])
-    num_slots = target_scenes if video_list else len(image_paths)
+    pre_matched = list(matched_scenes or [])
+    num_slots = len(pre_matched) if pre_matched else (target_scenes if video_list else len(image_paths))
     if num_slots <= 0:
         raise ValueError("Nenhuma cena (vídeo ou imagem) disponível para renderização.")
 
@@ -489,7 +491,15 @@ def render_video(
     seg_frames = max(int(round(max(2.0, raw_seg_dur) * fps)), int(round((trans_dur + 0.9) * fps)))
     seg_dur = seg_frames / float(fps)
 
-    if video_list:
+    if pre_matched:
+        for vf, v_start, vw, vh in pre_matched:
+            scenes.append({"type": "video", "path": vf, "start": v_start, "w": vw, "h": vh})
+        _log(
+            log_cb,
+            f"[VideoEngine] MODO SINCRONIA SEMÂNTICA (IA VISÃO): {len(scenes)} cenas em vídeo HD "
+            f"casadas com a narração ({seg_dur:.2f}s cada)!",
+        )
+    elif video_list:
         slices = build_video_scene_slices(video_list, num_scenes=num_slots, scene_dur=seg_dur + 0.15)
         for vf, v_start, vw, vh in slices:
             scenes.append({"type": "video", "path": vf, "start": v_start, "w": vw, "h": vh})

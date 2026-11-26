@@ -50,8 +50,8 @@ LABEL_TO_MODE = {v: k for k, v in MODE_LABELS.items()}
 PIPELINE_STEPS = [
     "1/5 Pauta",
     "2/5 Roteiro",
-    "3/5 Cenas",
-    "4/5 Voz/Ass",
+    "3/5 Voz/Ass",
+    "4/5 Sincronia IA",
     "5/5 FFmpeg",
 ]
 

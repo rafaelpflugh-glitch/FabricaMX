@@ -32,6 +32,7 @@ INTERNAL_MODULES = [
     "src.scriptwriter",
     "src.media_fetcher",
     "src.video_fetcher",
+    "src.scene_matcher",
     "src.tts_subtitles",
     "src.video_engine",
     "src.pipeline",

@@ -15,6 +15,7 @@ nichos/*/assets/broll/*.mp4
 nichos/*/assets/broll/*.mov
 nichos/*/assets/broll/*.mkv
 nichos/*/assets/broll/*.webm
+nichos/*/assets/broll/scene_index.json
 
 # Sistema operacional / IDEs
 .DS_Store

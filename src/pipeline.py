@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from src import HISTORY_PATH, TEMP_DIR, append_history
 from src.media_fetcher import fetch_and_prepare_images
+from src.scene_matcher import index_video_pool, match_scenes_to_narration
 from src.scraper import NewsArticle, fetch_next_news
 from src.scriptwriter import ScriptPackage, generate_script, pick_next_top5_topic
 from src.tts_subtitles import generate_narration_and_subtitles
@@ -142,27 +143,68 @@ class FabricaPipeline:
                 self.on_preview(article, script)
             self._progress(2, f"{prefix}{self.STAGES[1]}", 0.40)
 
-            # Etapa 3/5: Vídeo Real HD (yt-dlp automático) ou Fallback Fotos HD
+            # Etapa 3/5: Voz / Legenda primeiro (gera timeline exata das palavras para casar cenas!)
             self._check_cancelled()
-            self._progress(3, f"{prefix}{self.STAGES[2]}", 0.44)
-            usar_broll = bool(self.config.get("video", {}).get("usar_broll", True))
+            self._progress(3, f"{prefix}3/5 Voz/Legenda", 0.44)
+            self._log(f"{prefix}Etapa 3/5: Gerando narração Edge-TTS e legendas sincronizadas .ass...")
+            tts_result = generate_narration_and_subtitles(
+                script_text=script.roteiro,
+                work_dir=job_dir,
+                config=self.config,
+                log_cb=self._log,
+            )
+            self._progress(3, f"{prefix}3/5 Voz/Legenda", 0.56)
+
+            # Etapa 4/5: Caça Contextual de Vídeos (Nível 1) + Sincronia Semântica IA Visão (Nível 2)
+            self._check_cancelled()
+            self._progress(4, f"{prefix}4/5 Vídeos & Sincronia IA", 0.60)
+            video_cfg = self.config.get("video", {})
+            usar_broll = bool(video_cfg.get("usar_broll", True))
             custom_video_url = str(self.config.get("video_url_opcional") or "").strip()
             placar_texto = str(self.config.get("placar_opcional") or "").strip()
+            target_scenes = max(12, min(22, int(video_cfg.get("num_cenas_alvo", 18))))
 
+            contextual_videos: list[Path] = []
+            library_videos: list[Path] = []
+            matched_scenes: list[tuple[Path, float, int, int]] = []
             broll_videos: list[Path] = []
+
             if usar_broll or custom_video_url:
-                self._log(f"{prefix}Etapa 3/5: Preparando vídeo real 1080p HD (lances / gameplay oficial)...")
-                broll_videos = ensure_broll_videos(
+                self._log(f"{prefix}Etapa 4/5: Caçando vídeos contextuais HD + sincronizando cenas com a narração...")
+                contextual_videos, library_videos = ensure_broll_videos(
                     config=self.config,
                     article_title=article.title,
                     work_dir=job_dir,
                     custom_video_url=custom_video_url,
+                    embedded_videos=article.embedded_videos,
+                    contextual_queries=script.buscas_video_youtube,
                     log_cb=self._log,
                 )
+                broll_videos = contextual_videos + library_videos
+
+                if broll_videos:
+                    est_scene_dur = max(2.2, (tts_result.duration + 0.35) / target_scenes)
+                    indexed = index_video_pool(
+                        contextual_videos=contextual_videos,
+                        library_videos=library_videos,
+                        scene_dur=est_scene_dur,
+                        work_dir=job_dir,
+                        config=self.config,
+                        log_cb=self._log,
+                    )
+                    if indexed:
+                        matched_scenes = match_scenes_to_narration(
+                            word_timings=tts_result.word_timings,
+                            total_duration=tts_result.duration,
+                            num_scenes=target_scenes,
+                            indexed_scenes=indexed,
+                            config=self.config,
+                            log_cb=self._log,
+                        )
 
             image_paths: list[Path] = []
             if not broll_videos:
-                self._log(f"{prefix}Etapa 3/5: Sem clipe de vídeo disponível — buscando fotos HD de fallback...")
+                self._log(f"{prefix}Etapa 4/5: Sem clipe de vídeo — buscando fotos HD de fallback...")
                 image_paths = fetch_and_prepare_images(
                     search_terms=script.termos_busca_imagens,
                     output_dir=job_dir,
@@ -171,19 +213,7 @@ class FabricaPipeline:
                     article_images=article.article_images,
                     log_cb=self._log,
                 )
-            self._progress(3, f"{prefix}{self.STAGES[2]}", 0.62)
-
-            # Etapa 4/5: Voz / Legenda
-            self._check_cancelled()
-            self._progress(4, f"{prefix}{self.STAGES[3]}", 0.66)
-            self._log(f"{prefix}Etapa 4/5: Gerando narração Edge-TTS e legendas .ass...")
-            tts_result = generate_narration_and_subtitles(
-                script_text=script.roteiro,
-                work_dir=job_dir,
-                config=self.config,
-                log_cb=self._log,
-            )
-            self._progress(4, f"{prefix}{self.STAGES[3]}", 0.78)
+            self._progress(4, f"{prefix}4/5 Vídeos & Sincronia IA", 0.78)
 
             # Etapa 5/5: Render FFmpeg
             self._check_cancelled()
@@ -208,6 +238,7 @@ class FabricaPipeline:
                 work_dir=job_dir,
                 config=self.config,
                 broll_videos=broll_videos,
+                matched_scenes=matched_scenes,
                 placar_texto=placar_texto,
                 log_cb=self._log,
                 progress_cb=_on_ffmpeg_pct,

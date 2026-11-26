@@ -1,4 +1,4 @@
-"""Módulo de busca e download automático de B-Roll em vídeo 1080p HD via yt-dlp."""
+"""Módulo Nível 1: Caçador automático e contextual de vídeos HD (embeds da notícia + YouTube + B-Roll)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from src import BASE_DIR, normalize_text
 
 LogCallback = Callable[[str], None]
 
-# Trailers oficiais 100% GTA VI (Rockstar Games) para montar a biblioteca base de B-Roll uma única vez
 GTA6_OFFICIAL_VIDEOS = [
     ("gta6_trailer_2_rockstar.mp4", "https://www.youtube.com/watch?v=VQRLujxTm3c", None),
     ("gta6_trailer_1_rockstar.mp4", "https://www.youtube.com/watch?v=QdBZY2fkU-0", None),
@@ -75,16 +74,12 @@ def download_video_hd(
     timeout: int = 180,
     log_cb: LogCallback | None = None,
 ) -> Path | None:
-    """
-    Baixa vídeo em 1080p/720p HD (sem precisar baixar áudio, muito mais rápido!) via yt-dlp.
-    Suporta `section` (ex.: '*0:20-2:40') para baixar apenas um trecho limpo de vídeos longos.
-    """
+    """Baixa vídeo em 1080p/720p HD via yt-dlp (vídeo puro H.264, super rápido)."""
     ytdlp = _find_ytdlp()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists() and output_path.stat().st_size > 200_000:
         return output_path
 
-    # Vídeo puro H.264/MP4 até 1080p (super rápido e compatível com FFmpeg sem re-mux pesado)
     fmt = (
         "bestvideo[height<=1080][height>=720][vcodec^=avc1][ext=mp4]/"
         "bestvideo[height<=1080][height>=720][ext=mp4]/"
@@ -125,7 +120,6 @@ def download_video_hd(
     except Exception as exc:
         _log(log_cb, f"[VideoFetcher] Aviso no download ({exc}).")
 
-    # Remove arquivo parcial se falhou
     if output_path.exists() and output_path.stat().st_size < 150_000:
         output_path.unlink(missing_ok=True)
     return None
@@ -133,12 +127,13 @@ def download_video_hd(
 
 def _search_best_youtube_video(
     search_query: str,
-    min_dur: int = 60,
-    max_dur: int = 1500,
+    min_dur: int = 35,
+    max_dur: int = 2400,
     must_contain_any: tuple[str, ...] = (),
     exclude_terms: tuple[str, ...] = (),
-) -> tuple[str, str, int] | None:
-    """Busca o melhor vídeo HD no YouTube via yt-dlp --flat-playlist sem baixar ainda."""
+    skip_ids: set[str] | None = None,
+) -> tuple[str, str, int, str] | None:
+    """Busca o melhor vídeo HD no YouTube via yt-dlp --flat-playlist."""
     ytdlp = _find_ytdlp()
     cmd = [
         ytdlp,
@@ -163,10 +158,12 @@ def _search_best_youtube_video(
         return None
 
     for entry in entries:
-        vid_id = entry.get("id")
+        vid_id = str(entry.get("id") or "")
         title = str(entry.get("title") or "")
         dur = int(entry.get("duration") or 0)
-        if not vid_id or dur < min_dur or dur > max_dur:
+        if not vid_id or (skip_ids and vid_id in skip_ids):
+            continue
+        if dur < min_dur or dur > max_dur:
             continue
 
         norm_title = normalize_text(title)
@@ -175,7 +172,7 @@ def _search_best_youtube_video(
         if must_contain_any and not any(ok in norm_title for ok in must_contain_any):
             continue
 
-        return f"https://www.youtube.com/watch?v={vid_id}", title, dur
+        return f"https://www.youtube.com/watch?v={vid_id}", title, dur, vid_id
 
     return None
 
@@ -185,15 +182,16 @@ def ensure_broll_videos(
     article_title: str,
     work_dir: Path,
     custom_video_url: str = "",
+    embedded_videos: list[str] | None = None,
+    contextual_queries: list[str] | None = None,
     log_cb: LogCallback | None = None,
-) -> list[Path]:
+) -> tuple[list[Path], list[Path]]:
     """
-    Garante automaticamente clipes de vídeo HD reais para o vídeo atual (ZERO busca manual!):
-    - Se o usuário colou um link YouTube customizado -> baixa e usa 100% dele.
-    - Nicho GTA VI -> baixa 1 única vez os Trailers Oficiais 1 e 2 da Rockstar + 1 gameplay PS5
-      em nichos/gta_vi/assets/broll/ e reutiliza em todos os vídeos (zero GTA V!).
-    - Nicho Futebol Mexicano -> busca automaticamente um vídeo HD de gols/resumen do clube ou
-      partida atual no YouTube + combina com clipes de nichos/futebol_mexicano/assets/broll/.
+    Caçador Contextual Nível 1 (100% automático!):
+    Retorna `(contextual_videos, library_videos)`:
+    - `contextual_videos`: vídeos específicos desta pauta (link manual, embed da própria matéria
+      IGN/Eurogamer/Gigaton ou busca contextual no YouTube gerada pelo Ollama).
+    - `library_videos`: biblioteca permanente do nicho em `nichos/<nicho>/assets/broll/`.
     """
     niche_id = str(config.get("nicho_ativo", "gta_vi"))
     paths_dict = config.get("paths") or {}
@@ -201,83 +199,89 @@ def ensure_broll_videos(
     broll_dir.mkdir(parents=True, exist_ok=True)
     video_exts = (".mp4", ".mov", ".mkv", ".webm")
 
-    # 1) Link YouTube colado opcionalmente pelo usuário -> prioridade total
+    contextual_videos: list[Path] = []
+    used_yt_ids: set[str] = set()
+
+    # 1) Link manual do usuário (se preenchido no painel) -> prioridade absoluta
     if custom_video_url and custom_video_url.strip().startswith("http"):
-        _log(log_cb, f"[VideoFetcher] Baixando vídeo HD do link informado...")
+        _log(log_cb, "[VideoFetcher] Baixando vídeo HD do link informado...")
         custom_out = work_dir / "custom_source.mp4"
         dl = download_video_hd(custom_video_url.strip(), custom_out, section="*0:05-3:30", log_cb=log_cb)
+        if not dl:
+            dl = download_video_hd(custom_video_url.strip(), custom_out, section=None, log_cb=log_cb)
         if dl:
-            return [dl]
-        dl_full = download_video_hd(custom_video_url.strip(), custom_out, section=None, log_cb=log_cb)
-        if dl_full:
-            return [dl_full]
+            return [dl], []
 
-    existing_broll = sorted(
+    # 2) Vídeos YouTube embutidos diretamente na matéria (ex.: clipe do IGN/Eurogamer/Gigaton)
+    for emb_idx, emb_url in enumerate((embedded_videos or [])[:2], start=1):
+        _log(log_cb, f"[VideoFetcher] Vídeo embutido encontrado na matéria! Baixando HD ({emb_idx})...")
+        out_emb = work_dir / f"embedded_{emb_idx:02d}.mp4"
+        dl = download_video_hd(emb_url, out_emb, section="*0:10-2:15", log_cb=log_cb)
+        if not dl:
+            dl = download_video_hd(emb_url, out_emb, section=None, log_cb=log_cb)
+        if dl:
+            contextual_videos.append(dl)
+
+    # 3) Busca contextual no YouTube usando as queries específicas da notícia geradas pelo Ollama!
+    queries = [q.strip() for q in (contextual_queries or []) if q and q.strip()]
+    if niche_id == "gta_vi":
+        must_any = ("gta 6", "gta vi", "grand theft auto vi", "grand theft auto 6", "leonida", "vice city")
+        exclude = ("gta 5", "gta v", "mod", "fan made", "concept", "unreal engine", "reaction", "podcast", "podcasting")
+    elif niche_id == "futebol_mexicano":
+        must_any = ("gol", "resumen", "highlight", "america", "chivas", "tigres", "cruz azul", "pumas", "monterrey", "liga mx")
+        exclude = ("fifa", "ea fc", "fc 25", "fc 26", "efootball", "pes", "en vivo", "live", "reaccion")
+    else:
+        must_any = ()
+        exclude = ("reaction", "live")
+
+    for q_idx, sq in enumerate(queries[:2], start=1):
+        if len(contextual_videos) >= 2:
+            break
+        _log(log_cb, f"[VideoFetcher] Caçando vídeo contextual no YouTube ({q_idx}/2): '{sq}'...")
+        found = _search_best_youtube_video(
+            sq,
+            min_dur=35,
+            max_dur=2400,
+            must_contain_any=must_any,
+            exclude_terms=exclude,
+            skip_ids=used_yt_ids,
+        )
+        if found:
+            v_url, v_title, v_dur, v_id = found
+            used_yt_ids.add(v_id)
+            _log(log_cb, f"[VideoFetcher] Vídeo contextual encontrado: '{v_title[:60]}' ({v_dur}s)")
+            # Baixa ~105s de miolo (evita intro/outro falando) para rapidez e variedade
+            if v_dur > 180:
+                sec = "*0:30-2:15"
+            elif v_dur > 110:
+                sec = "*0:12-1:45"
+            else:
+                sec = None
+            dl = download_video_hd(v_url, work_dir / f"ctx_{q_idx:02d}.mp4", section=sec, log_cb=log_cb)
+            if dl:
+                contextual_videos.append(dl)
+
+    # 4) Garante biblioteca permanente 1080p do nicho (ex.: trailers oficiais de GTA VI baixados 1 vez)
+    library_videos = sorted(
         [p for p in broll_dir.iterdir() if p.is_file() and p.suffix.lower() in video_exts and p.stat().st_size > 200_000]
     )
 
-    # 2) Nicho GTA VI: monta automaticamente a biblioteca permanente 1080p oficial (só baixa 1 vez!)
-    if niche_id == "gta_vi":
-        if len(existing_broll) < 2:
-            _log(log_cb, "[VideoFetcher] Preparando biblioteca 1080p oficial de GTA VI (apenas na 1ª vez)...")
-            for fname, url, sec in GTA6_OFFICIAL_VIDEOS:
-                target = broll_dir / fname
-                if not target.exists():
-                    _log(log_cb, f"[VideoFetcher] Baixando clipe oficial Rockstar: {fname}...")
-                    download_video_hd(url, target, section=sec, log_cb=log_cb)
-
-            # Tenta baixar também 1 trecho real de gameplay PS5 de GTA 6 (sem GTA 5!)
-            gp_target = broll_dir / "gta6_gameplay_hd.mp4"
-            if not gp_target.exists():
-                found_gp = _search_best_youtube_video(
-                    "GTA 6 gameplay PS5 4K no commentary",
-                    min_dur=120,
-                    max_dur=3600,
-                    must_contain_any=("gta 6", "gta vi", "grand theft auto vi", "grand theft auto 6"),
-                    exclude_terms=("gta 5", "gta v", "mod", "fan made", "concept", "unreal engine", "reaction"),
-                )
-                if found_gp:
-                    gp_url, gp_title, _ = found_gp
-                    _log(log_cb, f"[VideoFetcher] Baixando trecho de gameplay real GTA 6: '{gp_title[:55]}'...")
-                    download_video_hd(gp_url, gp_target, section="*1:00-3:15", log_cb=log_cb)
-
-        existing_broll = sorted(
+    if niche_id == "gta_vi" and len(library_videos) < 2:
+        _log(log_cb, "[VideoFetcher] Completando biblioteca permanente 1080p oficial de GTA VI...")
+        for fname, url, sec in GTA6_OFFICIAL_VIDEOS:
+            target = broll_dir / fname
+            if not target.exists():
+                download_video_hd(url, target, section=sec, log_cb=log_cb)
+        library_videos = sorted(
             [p for p in broll_dir.iterdir() if p.is_file() and p.suffix.lower() in video_exts and p.stat().st_size > 200_000]
         )
-        if existing_broll:
-            _log(log_cb, f"[VideoFetcher] {len(existing_broll)} vídeo(s) 1080p oficiais de GTA VI prontos para corte!")
-        return existing_broll
 
-    # 3) Nicho Futebol Mexicano: busca automaticamente melhores momentos / gols reais em HD!
-    if niche_id == "futebol_mexicano":
-        foco = str(config.get("clube_foco") or "Club América")
-        # Tenta buscar um resumo específico da matéria ou do clube foco
-        clean_title_words = [w for w in article_title.split() if len(w) > 3][:5]
-        search_queries = [
-            f"{foco} goles resumen highlights Liga MX",
-            f"{' '.join(clean_title_words)} resumen goles Liga MX",
-        ]
-        auto_clip: Path | None = None
-        for sq in search_queries:
-            found = _search_best_youtube_video(
-                sq,
-                min_dur=90,
-                max_dur=1800,
-                must_contain_any=("gol", "resumen", "highlight", "america", "chivas", "tigres", "cruz azul", "liga mx"),
-                exclude_terms=("fifa", "ea fc", "fc 25", "fc 26", "efootball", "pes", "en vivo", "live"),
-            )
-            if found:
-                v_url, v_title, v_dur = found
-                _log(log_cb, f"[VideoFetcher] Lances HD encontrados: '{v_title[:60]}' ({v_dur}s)")
-                sec = "*0:18-2:55" if v_dur > 190 else None
-                auto_clip = download_video_hd(v_url, work_dir / "liga_mx_highlights.mp4", section=sec, log_cb=log_cb)
-                if auto_clip:
-                    break
-
-        clips = ([auto_clip] if auto_clip else []) + existing_broll
-        return clips
-
-    return existing_broll
+    _log(
+        log_cb,
+        f"[VideoFetcher] Pool de vídeo pronto: {len(contextual_videos)} vídeo(s) contextual(is) da pauta + "
+        f"{len(library_videos)} vídeo(s) na biblioteca do nicho.",
+    )
+    return contextual_videos, library_videos
 
 
 def build_video_scene_slices(
@@ -285,10 +289,7 @@ def build_video_scene_slices(
     num_scenes: int,
     scene_dur: float,
 ) -> list[tuple[Path, float, int, int]]:
-    """
-    Gera lista de `num_scenes` trechos não repetidos (arquivo, start_s, width, height)
-    distribuídos ao longo dos vídeos HD de B-Roll, pulando intros/outros pretos.
-    """
+    """Fallback de fatiamento distribuído quando o Scene Matcher semântico não está disponível."""
     if not video_files or num_scenes <= 0:
         return []
 
@@ -303,7 +304,6 @@ def build_video_scene_slices(
             pool.append((vf, 0.0, w, h))
             continue
 
-        # Divide o vídeo em fatias limpas bem espaçadas para máxima variedade visual
         step = max(scene_dur + 1.0, (end_limit - start_margin) / max(1, min(22, num_scenes + 4)))
         t = start_margin
         while t <= end_limit:
@@ -315,8 +315,6 @@ def build_video_scene_slices(
 
     random.shuffle(pool)
     selected: list[tuple[Path, float, int, int]] = []
-    idx = 0
-    while len(selected) < num_scenes:
+    for idx in range(num_scenes):
         selected.append(pool[idx % len(pool)])
-        idx += 1
     return selected

@@ -79,7 +79,7 @@ LOW_VALUE_TITLE_PATTERNS = (
 
 @dataclass
 class NewsArticle:
-    """Representa uma pauta coletada e enriquecida com texto completo."""
+    """Representa uma pauta coletada e enriquecida com texto completo e vídeos embutidos."""
 
     title: str
     url: str
@@ -90,6 +90,7 @@ class NewsArticle:
     full_text: str = ""
     og_image: str = ""
     article_images: list[str] = field(default_factory=list)
+    embedded_videos: list[str] = field(default_factory=list)
     matched_keywords: list[str] = field(default_factory=list)
     score: int = 0
 
@@ -176,15 +177,49 @@ def _extract_rss_image(entry: Any) -> str:
     return ""
 
 
+def _extract_youtube_urls_from_soup(soup: BeautifulSoup, page_url: str) -> list[str]:
+    """Extrai links/embeds do YouTube encontrados dentro da própria matéria jornalística."""
+    import re
+
+    yt_ids: list[str] = []
+    patterns = (
+        r"(?:youtube\.com/embed/|youtube-nocookie\.com/embed/|youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})",
+    )
+
+    def _scan(text: str) -> None:
+        for pat in patterns:
+            for m in re.findall(pat, text or ""):
+                if m not in yt_ids:
+                    yt_ids.append(m)
+
+    # Se a própria URL já é YouTube (ex.: RSS do Gigaton Games)
+    _scan(page_url)
+
+    for iframe in soup.find_all("iframe"):
+        _scan(iframe.get("src") or "")
+        _scan(iframe.get("data-src") or "")
+    for a in soup.find_all("a", href=True):
+        href = str(a.get("href") or "")
+        if "youtu" in href.lower():
+            _scan(href)
+
+    return [f"https://www.youtube.com/watch?v={vid}" for vid in yt_ids[:3]]
+
+
 def scrape_full_article(
     url: str,
     fallback_summary: str = "",
     timeout: int = 18,
     log_cb: LogCallback | None = None,
-) -> tuple[str, str, list[str]]:
-    """Faz scraping do texto completo da matéria e extrai og:image + imagens do corpo."""
+) -> tuple[str, str, list[str], list[str]]:
+    """Faz scraping do texto completo da matéria e extrai og:image, imagens e vídeos YouTube embutidos."""
     og_image = ""
     extra_images: list[str] = []
+    embedded_videos: list[str] = []
+
+    if "youtube.com/watch" in (url or "").lower() or "youtu.be/" in (url or "").lower():
+        embedded_videos.append(url)
+        return fallback_summary, "", [], embedded_videos
 
     try:
         resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout, allow_redirects=True)
@@ -195,12 +230,13 @@ def scrape_full_article(
         final_url = resp.url
     except Exception as exc:
         _log(log_cb, f"[Scraper] Aviso: não foi possível abrir matéria ({exc}). Usando resumo.")
-        return fallback_summary, "", []
+        return fallback_summary, "", [], embedded_videos
 
     if "news.google.com" in urlparse(final_url).netloc.lower():
-        return fallback_summary, "", []
+        return fallback_summary, "", [], embedded_videos
 
     soup = BeautifulSoup(html, "html.parser")
+    embedded_videos = _extract_youtube_urls_from_soup(soup, final_url)
 
     for tag_name, attrs in (
         ("meta", {"property": "og:image"}),
@@ -271,7 +307,7 @@ def scrape_full_article(
     if len(full_text) > 4500:
         full_text = full_text[:4500].rsplit(" ", 1)[0] + "..."
 
-    return full_text, og_image, extra_images
+    return full_text, og_image, extra_images, embedded_videos
 
 
 def _score_article(
@@ -524,7 +560,7 @@ def fetch_next_news(
 
     chosen = candidates[0]
     for cand in candidates[:3]:
-        full_text, og_image, extra_images = scrape_full_article(
+        full_text, og_image, extra_images, embedded_videos = scrape_full_article(
             url=cand.url,
             fallback_summary=cand.summary,
             log_cb=log_cb,
@@ -535,6 +571,7 @@ def fetch_next_news(
                 extra_images.insert(0, cand.og_image)
             cand.og_image = og_image
         cand.article_images = extra_images
+        cand.embedded_videos = embedded_videos
         chosen = cand
         if len(cand.full_text) >= 280:
             break
@@ -547,7 +584,7 @@ def fetch_next_news(
     _log(
         log_cb,
         f"[Scraper] Texto extraído: {len(chosen.full_text)} caracteres | "
-        f"og:image: {'sim' if chosen.og_image else 'não'} | "
-        f"imagens extras: {len(chosen.article_images)}",
+        f"vídeos YouTube embutidos: {len(chosen.embedded_videos)} | "
+        f"og:image: {'sim' if chosen.og_image else 'não'}",
     )
     return chosen

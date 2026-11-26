@@ -35,6 +35,7 @@ class ScriptPackage:
     roteiro: str
     gancho_tela: str
     termos_busca_imagens: list[str] = field(default_factory=list)
+    buscas_video_youtube: list[str] = field(default_factory=list)
     descricao_tiktok: str = ""
     hashtags: list[str] = field(default_factory=list)
     word_count: int = 0
@@ -243,26 +244,29 @@ NOTÍCIA REAL:
 
 REGRAS DE RETENÇÃO VIRAL (OBRIGATÓRIAS):
 1. Idioma do roteiro, gancho e descrição: {lp['lang_name']}.
-2. Responda APENAS com um JSON válido com EXATAMENTE estas 5 chaves:
+2. Responda APENAS com um JSON válido com EXATAMENTE estas 6 chaves:
    - "roteiro": string
    - "gancho_tela": string
    - "termos_busca_imagens": array de 6 strings
+   - "buscas_video_youtube": array de 3 strings
    - "descricao_tiktok": string
    - "hashtags": array de 6 a 8 strings
 3. Regras ESTRITAS para "roteiro":
-   - Extensão OBRIGATÓRIA: entre 175 e 200 palavras (para dar 62–72 segundos a +12% de velocidade).
+   - Extensão OBRIGATÓRIA: entre 175 e 205 palavras (para dar 62–72 segundos a +12% de velocidade). Escreva um texto RICO e completo — NUNCA devolva um resumo curto de 100 palavras!
    - PROIBIDO parecer telejornal chato ou texto robótico! Use FRASES CURTAS E CORTANTES (6 a 13 palavras por frase), tensão real e ritmo acelerado.
+   - Se o idioma for Português do Brasil e a matéria original usar termos de Portugal ("autocarro", "consola", "ecrã", "telemóvel"), adapte SEMPRE para Português do Brasil ("ônibus", "console", "tela", "celular").
    - ESTRUTURA DE RETENÇÃO (texto corrido pronto para narração, SEM títulos, SEM números de lista, SEM emojis, SEM hashtags):
      • GANCHO (0-3s): Frase chocante ou polêmica que prende no primeiro segundo. PROHIBIDO saudações ("Fala galera", "Hola amigos", "Hey guys").
      • LOOP ABERTO (3-6s): Promessa rápida de algo surpreendente que vem no final.
-     • DESENVOLVIMENTO COM AÇÃO: Nomes reais, números concretos, lances/cenas/detalhes que deixam o público vidrado.
+     • DESENVOLVIMENTO COM AÇÃO (3 blocos de ~35 palavras cada): Nomes reais, números concretos, cenas/detalhes/reações da comunidade e consequências práticas.
      • QUEBRA DE PADRÃO + CTA NO MEIO: Inclua naturalmente: "{lp['cta']}"
      • CLÍMAX + DEBATE: Revelação final + pergunta provocativa direta que faça o público discutir nos comentários.
    - Fatos: {lp['regras_fatos']}
 4. "gancho_tela": 3 a 5 palavras EM CAIXA ALTA de alto impacto.
-5. "termos_busca_imagens": Exatamente 6 buscas MUITO ESPECÍFICAS de AÇÃO/CENAS (mínimo 4 palavras cada) focadas em JOGADORES EM AÇÃO, LANCES, GOLS, PERSONAGENS OU GAMEPLAY — nunca termos genéricos soltos. Inclua sempre o contexto "{img_suffix}".
-6. "descricao_tiktok": 1 frase polêmica curta SEM hashtags dentro dela.
-7. "hashtags": 6 a 8 hashtags começando com #.
+5. "termos_busca_imagens": Exatamente 6 buscas MUITO ESPECÍFICAS de AÇÃO/CENAS (mínimo 4 palavras cada). Inclua sempre "{img_suffix}".
+6. "buscas_video_youtube": Exatamente 3 buscas curtas e específicas em INGLÊS ou ESPANHOL criadas ESTRITAMENTE a partir dos fatos desta notícia para achar GAMEPLAY REAL ou LANCES REAIS ligados ao tema exato (NÃO copie exemplos genéricos; use o nome do jogo/clube + o acontecimento real desta matéria).
+7. "descricao_tiktok": 1 frase polêmica curta SEM hashtags dentro dela.
+8. "hashtags": 6 a 8 hashtags começando com #.
 
 Retorne APENAS o JSON:"""
 
@@ -314,11 +318,12 @@ def _build_length_adjustment_prompt(
 ) -> str:
     lp = _language_pack(config)
     if current_words < 168:
-        missing = max(25, 188 - current_words)
+        missing = max(35, 188 - current_words)
         instruction = (
-            f"O 'roteiro' atual está CURTO DEMAIS ({current_words} palavras). "
-            f"Adicione pelo menos {missing} palavras para atingir 180 a 198 palavras (acima de 60 segundos!). "
-            f"Expanda cada ponto com detalhes visuais de ação, emoção e impacto SEM inventar fatos falsos."
+            f"O campo 'roteiro' atual tem APENAS {current_words} palavras — isso dá menos de 45 segundos e NÃO monetiza no TikTok! "
+            f"REESCREVA o campo 'roteiro' adicionando pelo menos +{missing} palavras novas (total entre 178 e 198 palavras). "
+            f"Desenvolva 3 novos blocos curtos explicando o contexto, a reação dos fãs/jogadores e por que isso muda tudo, "
+            f"mantendo frases curtas de impacto e SEM inventar fatos falsos."
         )
     else:
         instruction = (
@@ -328,9 +333,9 @@ def _build_length_adjustment_prompt(
 
     return f"""{instruction}
 Regras obrigatórias:
-- Idioma: {lp['lang_name']}
+- Idioma: {lp['lang_name']} (se for PT-BR, nunca use palavras de Portugal como 'autocarro' ou 'consola')
 - Frases curtas de alta retenção, SEM saudações, SEM emojis, SEM hashtags no meio/fim do roteiro
-- Mantenha as outras 4 chaves intactas ("gancho_tela", "termos_busca_imagens", "descricao_tiktok", "hashtags")
+- Mantenha todas as outras chaves do JSON intactas
 
 JSON ATUAL:
 {json.dumps(current_json, ensure_ascii=False, indent=2)}
@@ -433,11 +438,13 @@ def generate_script(
             adj_data = _parse_json_response(adj_raw)
             adj_roteiro = _clean_script_text(str(adj_data.get("roteiro", "")))
             adj_wc = _count_words(adj_roteiro)
-            if abs(adj_wc - 188) < abs(wc - 188) and adj_wc >= 110:
+            if abs(adj_wc - 188) < abs(wc - 188) and adj_wc >= 95:
                 data = adj_data
                 roteiro = adj_roteiro
                 wc = adj_wc
                 _log(log_cb, f"[Scriptwriter] Roteiro ajustado para {wc} palavras.")
+            else:
+                _log(log_cb, f"[Scriptwriter] Ajuste retornou {adj_wc} palavras; tentando novamente...")
         except Exception as exc:
             _log(log_cb, f"[Scriptwriter] Aviso no ajuste ({exc}). Mantendo versão atual.")
             break
@@ -472,6 +479,26 @@ def generate_script(
             terms.append(fb)
     terms = terms[:6]
 
+    raw_yt = data.get("buscas_video_youtube")
+    yt_queries: list[str] = []
+    if isinstance(raw_yt, list):
+        for item in raw_yt:
+            q = str(item).strip()
+            if q and q not in yt_queries:
+                yt_queries.append(q)
+    elif isinstance(raw_yt, str) and raw_yt.strip():
+        yt_queries = [x.strip() for x in raw_yt.split(",") if x.strip()]
+
+    if not yt_queries:
+        niche_id = str(config.get("nicho_ativo", ""))
+        short_title = " ".join(article.title.split()[:7])
+        if niche_id == "gta_vi":
+            yt_queries = [f"GTA 6 {short_title} gameplay PS5", "GTA 6 PS5 gameplay 4K no commentary"]
+        else:
+            foco = str(config.get("clube_foco") or "Club America")
+            yt_queries = [f"{short_title} resumen goles Liga MX", f"{foco} goles resumen highlights Liga MX"]
+    yt_queries = yt_queries[:3]
+
     descricao = re.sub(r"#[\wÁÉÍÓÚÜÑáéíóúüñ]+", "", str(data.get("descricao_tiktok") or "")).strip()
     if not descricao:
         descricao = f"{article.title}"
@@ -481,13 +508,14 @@ def generate_script(
     _log(
         log_cb,
         f"[Scriptwriter] Pronto! {wc} palavras | Gancho: '{gancho}' | "
-        f"{len(terms)} termos de cena | {len(hashtags)} hashtags.",
+        f"{len(yt_queries)} buscas YouTube | {len(hashtags)} hashtags.",
     )
 
     return ScriptPackage(
         roteiro=roteiro,
         gancho_tela=gancho,
         termos_busca_imagens=terms,
+        buscas_video_youtube=yt_queries,
         descricao_tiktok=descricao,
         hashtags=hashtags,
         word_count=wc,
