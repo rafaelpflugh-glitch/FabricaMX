@@ -21,6 +21,11 @@ nichos/*/assets/broll/scene_index.json
 secrets.json
 .env
 
+# Cache local de escudos e históricos por máquina
+assets/crests/
+history.json
+nichos/*/history.json
+
 # Sistema operacional / IDEs
 .DS_Store
 Thumbs.db

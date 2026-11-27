@@ -61,9 +61,17 @@ LOW_VALUE_TITLE_PATTERNS = (
     "donde ver",
     "onde assistir",
     "a que hora",
+    "quien transmite",
+    "que canal transmite",
+    "por que canal",
+    "horario y canal",
     "horario y transmision",
     "horario y donde",
     "canal y horario",
+    "canal y hora",
+    "donde y cuando",
+    "como ver",
+    "transmision en vivo",
     "minuto a minuto",
     "en vivo:",
     "en vivo hoy",
@@ -327,28 +335,60 @@ def _score_article(
 
     matched: list[str] = []
     score = 0
+    is_specific_focus = bool(foco_norm) and "geral" not in foco_norm and "general" not in foco_norm
+    # Termos que representam diretamente o foco/clube (ex.: "club america", "america", "aguilas", "coapa")
+    focus_tokens = [tok for tok in foco_norm.split() if len(tok) >= 4 and tok not in ("club", "futebol", "futbol", "liga")]
+    specific_keywords = [
+        norm_kw
+        for _, norm_kw in norm_keywords
+        if norm_kw and norm_kw not in ("liga mx", "futbol mexicano", "fútbol mexicano", "noticias")
+    ]
+    focus_in_title = False
+
     for orig_kw, norm_kw in norm_keywords:
         if not norm_kw:
             continue
         if norm_kw in searchable_body:
             matched.append(orig_kw)
-            weight = 4
+            is_generic = norm_kw in ("liga mx", "futbol mexicano", "noticias")
+            weight = 2 if is_generic else 5
             if norm_kw in searchable_title:
-                weight += 4
-            if foco_norm and foco_norm in norm_kw:
-                weight += 3
+                weight += 3 if is_generic else 8
+                if not is_generic:
+                    focus_in_title = True
+            if is_specific_focus and (foco_norm in norm_kw or any(ft in norm_kw for ft in focus_tokens)):
+                weight += 6
+                if norm_kw in searchable_title:
+                    weight += 10
+                    focus_in_title = True
             score += weight
+
+    # Se o usuário escolheu um clube/foco específico (ex.: Club América), exige menção real dele (não apenas "Liga MX")
+    if is_specific_focus and specific_keywords:
+        has_specific_match = any(sk in searchable_body for sk in specific_keywords)
+        if not has_specific_match:
+            return [], 0
+        if focus_in_title:
+            score += 12
+        else:
+            score = max(1, score - 6)
 
     if matched:
         host = urlparse(url or "").netloc.lower()
-        if "news.google.com" not in host:
-            score += 4
+        if "news.google.com" in host:
+            # Links redirecionados do Google News não entregam o corpo da matéria (deixam o roteiro raso)
+            score = max(1, score - 14)
+        else:
+            score += 14
         if idioma.startswith("es") and any(
             d in host for d in (".mx", "espndeportes", "mediotiempo", "record.com", "tudn", "bolavip", "marca", "clarosports")
         ):
             score += 6
         elif idioma.startswith("pt") and any(
-            d in host for d in (".br", "ign.com", "omelete", "tecmundo", "voxel", "theenemy", "meups", "flowgames", "eurogamer.pt", "uol.com")
+            d in host for d in (
+                ".br", "portalleodias.com", "metropoles.com", "hugogloss", "ign.com",
+                "omelete", "tecmundo", "voxel", "theenemy", "meups", "flowgames", "eurogamer.pt", "uol.com", "globo.com"
+            )
         ):
             score += 6
 
@@ -559,7 +599,8 @@ def fetch_next_news(
         )
 
     chosen = candidates[0]
-    for cand in candidates[:3]:
+    best_by_len: NewsArticle | None = None
+    for cand in candidates[:8]:
         full_text, og_image, extra_images, embedded_videos = scrape_full_article(
             url=cand.url,
             fallback_summary=cand.summary,
@@ -572,9 +613,14 @@ def fetch_next_news(
             cand.og_image = og_image
         cand.article_images = extra_images
         cand.embedded_videos = embedded_videos
-        chosen = cand
-        if len(cand.full_text) >= 280:
+        if best_by_len is None or len(cand.full_text) > len(best_by_len.full_text):
+            best_by_len = cand
+        # Só fecha imediatamente se conseguiu ler o texto real da matéria (>= 450 caracteres)!
+        if len(cand.full_text) >= 450:
+            chosen = cand
             break
+    else:
+        chosen = best_by_len or candidates[0]
 
     _log(
         log_cb,

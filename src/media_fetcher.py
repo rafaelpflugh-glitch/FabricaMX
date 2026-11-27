@@ -33,6 +33,7 @@ IMAGE_HEADERS = {
 }
 
 BLOCKED_DOMAINS = (
+    # Bancos de imagem com marca d'água
     "shutterstock.com",
     "gettyimages.com",
     "alamy.com",
@@ -43,14 +44,36 @@ BLOCKED_DOMAINS = (
     "vecteezy.com",
     "stock.adobe.com",
     "freepik.com",
+    "agefotostock.",
+    "bigstockphoto.",
+    "canstockphoto.",
+    "colourbox.",
+    "pond5.",
+    "wireimage.",
+    "megapixl.",
+    "picfair.",
+    # PNG recortado / clipart / memes / thumbnails poluídas do YouTube
     "pngtree.com",
     "pngwing.com",
     "cleanpng.com",
     "seekpng.com",
     "klipartz.com",
     "clipart",
+    "i.ytimg.com",
+    "img.youtube.com",
+    "imgflip.com",
+    "tenor.com",
+    "giphy.com",
+    "memedroid.",
+    "deviantart.com",
+    "wattpad.com",
+    "aminoapps.com",
+    "blogspot.",
+    "tumblr.com",
+    # Redes sociais / lojas / mapas
     "pinterest.",
     "tiktok.com",
+    "kwai.com",
     "facebook.com",
     "instagram.com",
     "amazon.",
@@ -65,7 +88,60 @@ BLOCKED_DOMAINS = (
     "worldatlas.com",
     "mapsofworld.com",
     "britannica.com",
-    "nationalgeographic.",
+)
+
+# Fontes jornalísticas, emissoras oficiais, portais HD e agências limpas (recebem prioridade máxima!)
+TRUSTED_IMAGE_DOMAINS = (
+    # Portais & Emissoras BR (fotos limpas em alta resolução, sem marca d'água)
+    "glbimg.com",
+    "globo.com",
+    "imguol.com",
+    "uol.com.br",
+    "metropoles.com",
+    "portalleodias.com",
+    "terra.com.br",
+    "estadao.com.br",
+    "lance.com.br",
+    "r7.com",
+    "sbt.com.br",
+    "cnnbrasil.com.br",
+    "caras.com.br",
+    "purepeople.com.br",
+    "contigo.com.br",
+    "ofuxico.com.br",
+    # Esportes MX / BR / Internacional
+    "espncdn.com",
+    "espn.com",
+    "tudn.com",
+    "mediotiempo.com",
+    "record.com.mx",
+    "foxsports.com",
+    "clarosports.com",
+    "tvazteca.com",
+    "marca.com",
+    "as.com",
+    "goal.com",
+    "fifa.com",
+    "conmebol.com",
+    "ligamx.net",
+    "clubamerica.com.mx",
+    # Games / Música / Fotojornalismo & Acervos Limpos
+    "rockstargames.com",
+    "ignimgs.com",
+    "ign.com",
+    "gamespot.com",
+    "eurogamer.net",
+    "polygon.com",
+    "premierguitar.com",
+    "guitarworld.com",
+    "reverb.com",
+    "fender.com",
+    "gibson.com",
+    "wikimedia.org",
+    "reuters.com",
+    "apnews.com",
+    "unsplash.com",
+    "pexels.com",
 )
 
 BANNED_IMAGE_TOKENS = (
@@ -302,8 +378,8 @@ def _download_and_validate_image(
             if not (is_hd_landscape or is_hd_portrait):
                 return None
         else:
-            # Fallback mínimo 720p (jamais aceita sub-HD borrado como 768x384)
-            if h < 720 or w < 720:
+            # Fallback mínimo 580px (aceita fotos reais de celebridades/portais sem cair em fallback errado!)
+            if h < 580 or w < 580:
                 return None
 
         aspect = w / h
@@ -324,16 +400,49 @@ def normalize_image_to_vertical(
     target_h: int = 1920,
     variant_pan: float = 0.5,
 ) -> Image.Image:
-    """Normaliza 100% full-bleed 1080x1920 HD com nitidez UnsharpMask e contraste vibrante."""
+    """
+    Normaliza fotos para 1080x1920 preservando SEMPRE os rostos e o assunto principal:
+    - Fotos verticais/quadradas (aspect < 1.32): tela cheia 9:16 com foco no terço superior (nunca corta cabeça!).
+    - Fotos paisagem largas (aspect >= 1.32, ex.: 16:9 de casal ou ação lateral):
+      enquadramento inteligente 1080x1140 centralizado sobre fundo borrado escuro 9:16
+      para NÃO cortar metade dos rostos nem jogar o assunto para fora da tela!
+    """
+    w, h = img.size
+    aspect = (w / h) if h > 0 else 1.0
+
+    if aspect >= 1.32:
+        # Fundo escuro cinema limpo (sem brilho distrativo atrás da foto principal!)
+        bg = ImageOps.fit(img, (270, 480), method=Image.Resampling.BILINEAR, centering=(0.5, 0.4))
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=18))
+        bg = ImageEnhance.Brightness(bg).enhance(0.32)
+        bg = bg.resize((target_w, target_h), Image.Resampling.BILINEAR)
+
+        # Foto principal em viewport amplo 1080x1060 (mantém ~78% da largura real 16:9 sem cortar rostos!)
+        fg_h = min(1140, max(780, int(round(target_w / min(aspect, 1.42)))))
+        fg = ImageOps.fit(
+            img,
+            (target_w, fg_h),
+            method=Image.Resampling.LANCZOS,
+            centering=(variant_pan, 0.25),
+        )
+        fg = fg.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=3))
+        fg = ImageEnhance.Contrast(fg).enhance(1.06)
+        fg = ImageEnhance.Color(fg).enhance(1.10)
+
+        # Posiciona em y=310..1370 (abaixo do banner superior e acima da legenda fixa em y=1445!)
+        y_pos = max(250, min(380, (1420 - fg_h) // 2 + 120))
+        bg.paste(fg, (0, y_pos))
+        return bg
+
     fitted = ImageOps.fit(
         img,
         (target_w, target_h),
         method=Image.Resampling.LANCZOS,
-        centering=(variant_pan, 0.28),
+        centering=(variant_pan, 0.22),
     )
     fitted = fitted.filter(ImageFilter.UnsharpMask(radius=1.3, percent=125, threshold=3))
     fitted = ImageEnhance.Contrast(fitted).enhance(1.08)
-    fitted = ImageEnhance.Color(fitted).enhance(1.14)
+    fitted = ImageEnhance.Color(fitted).enhance(1.12)
     return fitted
 
 
@@ -344,13 +453,21 @@ def _parse_int(val: Any) -> int:
         return 0
 
 
-def _hd_priority_score(w: int, h: int) -> float:
-    """Pontua imagens priorizando 4K/Full HD e menor fator de ampliação para 1080x1920."""
+def _hd_priority_score(w: int, h: int, url: str = "") -> float:
+    """Pontua imagens priorizando FONTES CONFIÁVEIS/LIMPAS + resolução 4K/Full HD."""
+    score = 0.0
+    if url:
+        try:
+            host = urlparse(url).netloc.lower()
+            if any(td in host for td in TRUSTED_IMAGE_DOMAINS):
+                score += 8.5  # Portais oficiais, emissoras e agências limpas sempre no topo!
+        except Exception:
+            pass
     if w <= 0 or h <= 0:
-        return 0.5
+        return score + 0.5
     upscale = max(1080.0 / w, 1920.0 / h)
     # Menor upscale = mais nítida no frame vertical; bônus para fotos verticais/4K
-    score = 10.0 / max(0.5, upscale)
+    score += 10.0 / max(0.5, upscale)
     if h >= 1440:
         score += 4.0
     elif h >= 1080:
@@ -401,7 +518,7 @@ def _search_ddg_images(
     except Exception:
         pass
 
-    results_out.sort(key=lambda r: _hd_priority_score(r[2], r[3]), reverse=True)
+    results_out.sort(key=lambda r: _hd_priority_score(r[2], r[3], r[0]), reverse=True)
     return results_out
 
 
@@ -420,11 +537,11 @@ def fetch_and_prepare_images(
     video_cfg = config.get("video", {})
     target_w = int(video_cfg.get("largura", 1080))
     target_h = int(video_cfg.get("altura", 1920))
-    min_images = max(12, int(video_cfg.get("num_cenas_min", video_cfg.get("num_imagens_min", 18))))
+    min_images = max(6, int(video_cfg.get("num_cenas_min", video_cfg.get("num_imagens_min", 14))))
     max_images = max(min_images, int(video_cfg.get("num_cenas_max", video_cfg.get("num_imagens_max", 24))))
     target_images = max(
         min_images,
-        min(max_images, int(video_cfg.get("num_cenas_alvo", video_cfg.get("num_imagens_alvo", 20)))),
+        min(max_images, int(video_cfg.get("num_cenas_alvo", video_cfg.get("num_imagens_alvo", 18)))),
     )
 
     region = str(config.get("ddgs_regiao", "br-pt"))
@@ -544,3 +661,121 @@ def fetch_and_prepare_images(
 
     _log(log_cb, f"[MediaFetcher] {len(saved_paths)} cenas full-bleed prontas em {target_w}x{target_h}.")
     return saved_paths
+
+
+def fetch_images_for_scenes(
+    cenas: list[dict[str, str]],
+    output_dir: Path,
+    config: dict[str, Any],
+    og_image: str = "",
+    article_images: list[str] | None = None,
+    log_cb: LogCallback | None = None,
+) -> list[list[Path]]:
+    """
+    Busca 1 a 2 fotos HD ESPECIFICAMENTE para cada cena do roteiro, na ordem exata da fala!
+    Garante que quando a narração fala de 'Marisa Monte e Nando Reis', a tela mostre
+    EXATAMENTE Marisa Monte e Nando Reis naquele segundo (e nunca uma celebridade aleatória).
+    """
+    video_cfg = config.get("video", {})
+    target_w = int(video_cfg.get("largura", 1080))
+    target_h = int(video_cfg.get("altura", 1920))
+    region = str(config.get("ddgs_regiao", "br-pt"))
+    niche_id = str(config.get("nicho_ativo", ""))
+
+    images_dir = output_dir / "scene_images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    seen_hashes: list[int] = []
+    tried_urls: set[str] = set()
+    article_pool = [u for u in [og_image, *(article_images or [])] if u and u.startswith("http")]
+    article_pool_idx = 0
+
+    def _download_one(url: str, title: str, strict_hd: bool) -> Image.Image | None:
+        if url in tried_urls:
+            return None
+        tried_urls.add(url)
+        img = _download_and_validate_image(url, title=title, niche_id=niche_id, strict_hd=strict_hd)
+        if img is None:
+            return None
+        dhash = _compute_dhash(img)
+        if any(_hamming_distance(dhash, prev) <= 5 for prev in seen_hashes):
+            return None
+        seen_hashes.append(dhash)
+        return img
+
+    scene_groups: list[list[Path]] = []
+    _log(log_cb, f"[MediaFetcher] Sincronia cena-a-cena: buscando fotos exatas para {len(cenas)} cenas...")
+
+    for s_idx, cena in enumerate(cenas):
+        raw_q = str(cena.get("busca_visual") or "").strip()
+        # Para fofoca/pessoas, NÃO polui o nome exato da pessoa com sufixo genérico se já tem 2+ palavras
+        if niche_id in ("fofoca_famosos", "facebook_fofoca") and len(raw_q.split()) >= 2:
+            query = raw_q
+        else:
+            query = sanitize_niche_query(raw_q, config) if raw_q else str(config.get("nicho_nome", ""))
+
+        imgs_this_scene: list[Image.Image] = []
+        # Cena 0 (gancho) pode abrir com a foto oficial da matéria se existir
+        if s_idx == 0 and article_pool_idx < len(article_pool):
+            first_img = _download_one(article_pool[article_pool_idx], query, strict_hd=False)
+            article_pool_idx += 1
+            if first_img is not None:
+                imgs_this_scene.append(first_img)
+
+        if query:
+            _log(log_cb, f"[MediaFetcher] Cena {s_idx + 1}/{len(cenas)} -> '{query}'")
+            found = _search_ddg_images(query, region=region, max_results=22)
+            # 1ª passada: HD (1080p+)
+            for img_url, img_title, _, _ in found:
+                if len(imgs_this_scene) >= 2:
+                    break
+                got = _download_one(img_url, img_title, strict_hd=True)
+                if got is not None:
+                    imgs_this_scene.append(got)
+            # 2ª passada: >= 580px (garante foto REAL daquela pessoa específica!)
+            if len(imgs_this_scene) < 2:
+                for img_url, img_title, _, _ in found:
+                    if len(imgs_this_scene) >= 2:
+                        break
+                    got = _download_one(img_url, img_title, strict_hd=False)
+                    if got is not None:
+                        imgs_this_scene.append(got)
+            time.sleep(0.25)
+
+        # Fallback apenas se a busca específica daquela cena não retornou nenhuma foto válida
+        while not imgs_this_scene and article_pool_idx < len(article_pool):
+            got = _download_one(article_pool[article_pool_idx], query, strict_hd=False)
+            article_pool_idx += 1
+            if got is not None:
+                imgs_this_scene.append(got)
+
+        saved_group: list[Path] = []
+        for k, raw_img in enumerate(imgs_this_scene):
+            norm_img = normalize_image_to_vertical(raw_img, target_w=target_w, target_h=target_h)
+            out_p = images_dir / f"scene_{s_idx:02d}_{k}.jpg"
+            norm_img.save(out_p, format="JPEG", quality=95, subsampling=0, optimize=True)
+            saved_group.append(out_p)
+        scene_groups.append(saved_group)
+
+    # Se alguma cena ficou sem foto, herda da cena vizinha (nunca de celebridade aleatória!)
+    non_empty = [g for g in scene_groups if g]
+    if not non_empty:
+        # Fallback final tradicional se absolutamente nada baixou
+        fallback_list = fetch_and_prepare_images(
+            search_terms=[c.get("busca_visual", "") for c in cenas],
+            output_dir=output_dir,
+            config=config,
+            og_image=og_image,
+            article_images=article_images,
+            log_cb=log_cb,
+        )
+        return [[fallback_list[i % len(fallback_list)]] for i in range(len(cenas))]
+
+    for i in range(len(scene_groups)):
+        if not scene_groups[i]:
+            donor = scene_groups[i - 1] if i > 0 and scene_groups[i - 1] else non_empty[0]
+            scene_groups[i] = [donor[0]]
+
+    total_photos = sum(len(g) for g in scene_groups)
+    _log(log_cb, f"[MediaFetcher] Sincronia pronta: {total_photos} fotos casadas com {len(cenas)} cenas!")
+    return scene_groups

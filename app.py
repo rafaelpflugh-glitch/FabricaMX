@@ -25,6 +25,7 @@ from src.llm_client import GEMINI_MODELS, load_gemini_api_key, save_gemini_api_k
 from src.pipeline import FabricaPipeline
 from src.scraper import NewsArticle
 from src.scriptwriter import ScriptPackage, list_ollama_models
+from src.video_engine import VIDEO_FILTER_PRESETS
 
 # Paleta Dark Minimalista (Obsidiana + Ciano + Amarelo)
 BG_APP = "#0B0F17"
@@ -43,7 +44,9 @@ ACCENT_DANGER_HOVER = "#DC2626"
 ACCENT_GREEN = "#22C55E"
 
 MODE_LABELS = {
-    "adaptador_yt": "Adaptador YouTube (IGN / Gameranx / Rig)",
+    "moldura_viral": "Moldura Página Viral (Logo + Selo ✓ + Frase)",
+    "highlights_pro": "Highlights Futebol Pro (Áudio Original nos Gols)",
+    "adaptador_yt": "Adaptador YouTube (IGN / Gameranx / Recap)",
     "corte_original": "Cortador Viral (Áudio Original • TV / Streamer)",
     "noticia": "Notícia Quente (Portais + IA Visão)",
     "top5": "Top 5 / Segredos Virais",
@@ -55,6 +58,16 @@ PROVIDER_LABELS = {
     "ollama": "Ollama Local (PC)",
 }
 LABEL_TO_PROVIDER = {v: k for k, v in PROVIDER_LABELS.items()}
+
+FILTER_LABELS = {k: v["label"] for k, v in VIDEO_FILTER_PRESETS.items()}
+LABEL_TO_FILTER = {v: k for k, v in FILTER_LABELS.items()}
+
+FORMAT_LABELS = {
+    "auto": "Automático (9:16 Notícias • 1:1 Highlights)",
+    "9x16": "Vertical 9:16 (1080x1920 • TikTok Full)",
+    "1x1": "Quadrado 1:1 (1080x1080 • Padrão HighlightsMX)",
+}
+LABEL_TO_FORMAT = {v: k for k, v in FORMAT_LABELS.items()}
 
 PIPELINE_STEPS = [
     "1/5 Pauta",
@@ -350,10 +363,10 @@ class FabricaTKApp(ctk.CTk):
         self.batch_seg.grid(row=16, column=0, sticky="ew", padx=6, pady=(2, 12))
 
         # 6. Opções avançadas opcionais (100% automático se deixar em branco!)
-        self._section_label(controls, "LINK YOUTUBE / PLACAR (OPCIONAL • VAZIO = AUTO)", row=17)
+        self._section_label(controls, "LINK YOUTUBE / FRASE OU PLACAR (VAZIO = AUTO)", row=17)
         self.custom_video_entry = ctk.CTkEntry(
             controls,
-            placeholder_text="URL YouTube (ou deixe vazio p/ baixar sozinho)",
+            placeholder_text="URL YouTube/Shorts (ou deixe vazio p/ baixar sozinho)",
             fg_color=BG_INPUT,
             border_color=BORDER_SUBTLE,
             text_color=TEXT_PRIMARY,
@@ -363,13 +376,50 @@ class FabricaTKApp(ctk.CTk):
 
         self.placar_entry = ctk.CTkEntry(
             controls,
-            placeholder_text="Placar opcional (ex: AMÉRICA 3 x 2 BARCELONA)",
+            placeholder_text="Frase da moldura ou Placar (opcional • vazio = IA gera)",
             fg_color=BG_INPUT,
             border_color=BORDER_SUBTLE,
             text_color=TEXT_PRIMARY,
             height=32,
         )
-        self.placar_entry.grid(row=19, column=0, sticky="ew", padx=6, pady=(0, 10))
+        self.placar_entry.grid(row=19, column=0, sticky="ew", padx=6, pady=(0, 8))
+
+        # 6b. Filtro Visual (Vívido 2, HDR, Cinema, Neon, etc.)
+        video_cfg = self.global_cfg.get("video", {})
+        self._section_label(controls, "FILTRO VISUAL (COR & NITIDEZ)", row=20)
+        cur_filter = str(video_cfg.get("filtro_cor", "vivido2")).strip().lower()
+        self.filter_var = ctk.StringVar(value=FILTER_LABELS.get(cur_filter, FILTER_LABELS["vivido2"]))
+        self.filter_menu = ctk.CTkOptionMenu(
+            controls,
+            values=list(FILTER_LABELS.values()),
+            variable=self.filter_var,
+            fg_color=BG_INPUT,
+            button_color=ACCENT_CYAN_DARK,
+            button_hover_color=ACCENT_CYAN,
+            dropdown_fg_color=BG_CARD,
+            dropdown_hover_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=34,
+        )
+        self.filter_menu.grid(row=21, column=0, sticky="ew", padx=6, pady=(2, 8))
+
+        # 6c. Formato da Tela (Automático / 9:16 / Quadrado 1:1)
+        self._section_label(controls, "FORMATO DA TELA (9:16 OU QUADRADO 1:1)", row=22)
+        cur_fmt = str(video_cfg.get("formato_tela", "auto")).strip().lower()
+        self.format_var = ctk.StringVar(value=FORMAT_LABELS.get(cur_fmt, FORMAT_LABELS["auto"]))
+        self.format_menu = ctk.CTkOptionMenu(
+            controls,
+            values=list(FORMAT_LABELS.values()),
+            variable=self.format_var,
+            fg_color=BG_INPUT,
+            button_color=ACCENT_CYAN_DARK,
+            button_hover_color=ACCENT_CYAN,
+            dropdown_fg_color=BG_CARD,
+            dropdown_hover_color=BORDER_SUBTLE,
+            text_color=TEXT_PRIMARY,
+            height=34,
+        )
+        self.format_menu.grid(row=23, column=0, sticky="ew", padx=6, pady=(2, 10))
 
         # 7. Switches
         switch_card = ctk.CTkFrame(
@@ -379,10 +429,8 @@ class FabricaTKApp(ctk.CTk):
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        switch_card.grid(row=20, column=0, sticky="ew", padx=6, pady=(2, 6))
+        switch_card.grid(row=24, column=0, sticky="ew", padx=6, pady=(2, 6))
         switch_card.grid_columnconfigure(0, weight=1)
-
-        video_cfg = self.global_cfg.get("video", {})
         self.music_var = ctk.BooleanVar(value=bool(video_cfg.get("usar_musica", True)))
         self.music_switch = ctk.CTkSwitch(
             switch_card,
@@ -739,6 +787,8 @@ class FabricaTKApp(ctk.CTk):
         video_cfg["usar_broll"] = bool(self.broll_var.get())
         video_cfg["usar_intro"] = bool(self.intro_var.get())
         video_cfg["limpar_temp"] = bool(self.clean_temp_var.get())
+        video_cfg["filtro_cor"] = LABEL_TO_FILTER.get(self.filter_var.get(), "vivido2")
+        video_cfg["formato_tela"] = LABEL_TO_FORMAT.get(self.format_var.get(), "auto")
         self.global_cfg["video"] = video_cfg
 
         # Persiste escolhas do nicho atual (voz, foco, palavras-chave)
@@ -862,6 +912,8 @@ class FabricaTKApp(ctk.CTk):
             self.batch_seg,
             self.custom_video_entry,
             self.placar_entry,
+            self.filter_menu,
+            self.format_menu,
             self.music_switch,
             self.broll_switch,
             self.intro_switch,

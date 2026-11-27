@@ -154,22 +154,19 @@ def index_video_pool(
     work_dir: Path,
     config: dict[str, Any],
     log_cb: LogCallback | None = None,
-    contextual_max_samples: int = 12,
 ) -> list[IndexedScene]:
     """
     Indexa semanticamente os vídeos do pool:
     - Vídeos permanentes da pasta `assets/broll/` são indexados 1 ÚNICA VEZ e salvos em `scene_index.json`!
-    - Vídeos contextuais baixados para esta pauta são indexados rapidamente sob demanda.
+    - Vídeos contextuais baixados para esta pauta são indexados rapidamente sob demanda (~10-14 amostras).
     """
     ollama_url = str(config.get("ollama_url", "http://localhost:11434"))
     niche_id = str(config.get("nicho_ativo", "gta_vi"))
-    hint_map = {
-        "gta_vi": "GTA 6 video game (Vice City, Lucia, Jason, cars, action — also explicitly state if a frame shows a different game, logo, sponsor, or talking head)",
-        "musica_gear": "music documentary / famous rock guitarists / electric guitars / guitar pedals on stage or studio (name the guitarist, instrument, or band if visible)",
-        "tv_realities": "Brazilian cooking reality TV show kitchen scene",
-        "futebol_mexicano": "Mexican football Liga MX soccer match stadium players",
-    }
-    niche_hint = hint_map.get(niche_id, str(config.get("nicho_nome", "video clip")))
+    niche_hint = str(config.get("nicho_nome") or niche_id)
+    if niche_id == "gta_vi":
+        niche_hint = "GTA 6 video game"
+    elif niche_id == "futebol_mexicano":
+        niche_hint = "Mexican football soccer match"
     paths_dict = config.get("paths") or {}
     broll_dir = Path(paths_dict["broll_dir"]) if paths_dict.get("broll_dir") else work_dir
     cache_path = broll_dir / "scene_index.json"
@@ -275,9 +272,11 @@ def index_video_pool(
             cache[cache_key] = entries_for_cache
             cache_dirty = True
 
-    # Indexa vídeos contextuais primeiro
+    # Indexa vídeos contextuais com alta densidade (24 amostras em vídeos longos > 4min para não perder gols/lances!)
     for vf in contextual_videos:
-        _index_one(vf, is_ctx=True, max_samples=contextual_max_samples)
+        vf_dur, _, _ = probe_video_info(vf)
+        samples = 24 if vf_dur >= 240.0 else 18
+        _index_one(vf, is_ctx=True, max_samples=samples)
 
     # Indexa biblioteca permanente (até 26 amostras por vídeo -> salvo em cache para sempre!)
     for vf in library_videos:
@@ -309,39 +308,92 @@ def _build_narration_slots(
     return [" ".join(b).strip() or "(transição visual)" for b in buckets]
 
 
+def _enforce_chronological_continuity(
+    raw_ids: list[int],
+    ordered_scenes: list[IndexedScene],
+) -> list[int]:
+    """
+    Garante continuidade cronológica real:
+    - SLOT 0 (gancho inicial de ~3s) pode fazer flash-forward (ex.: clímax / lance de impacto).
+    - Do SLOT 1 até o fim, os índices SEMPRE avançam em ordem crescente no vídeo (NUNCA volta
+      dos 40 minutos para os 20 minutos e depois volta para 40!), evitando saltos temporais confusos.
+    """
+    n_slots = len(raw_ids)
+    n_cat = len(ordered_scenes)
+    if n_slots <= 2 or n_cat <= 2:
+        return raw_ids
+
+    hook_id = raw_ids[0]
+    body = sorted(raw_ids[1:])
+
+    fixed_body: list[int] = []
+    for pos, cid in enumerate(body):
+        if fixed_body and cid <= fixed_body[-1]:
+            remaining = len(body) - pos - 1
+            cand = fixed_body[-1] + 1
+            if cand < n_cat:
+                if (
+                    cand + 1 < n_cat - remaining
+                    and "[weak]" in ordered_scenes[cand].description.lower()
+                    and "[action]" in ordered_scenes[cand + 1].description.lower()
+                ):
+                    cand += 1
+                cid = cand
+            else:
+                cid = fixed_body[-1]
+        fixed_body.append(cid)
+
+    if fixed_body and fixed_body[0] == hook_id and n_cat > 1:
+        alt = 0 if hook_id != 0 else 1
+        if len(fixed_body) == 1 or alt < fixed_body[1]:
+            fixed_body[0] = alt
+
+    return [hook_id, *fixed_body]
+
+
 def _fallback_keyword_match(
     narration_slots: list[str],
     scenes: list[IndexedScene],
 ) -> list[IndexedScene]:
-    """Fallback local rápido caso o LLM de texto falhe ao retornar o JSON de mapeamento."""
-    chosen: list[IndexedScene] = []
+    """Fallback local rápido com continuidade cronológica caso o LLM de texto falhe."""
+    chosen_ids: list[int] = []
     used_indices: set[int] = set()
+    n_cat = len(scenes)
+    n_slots = max(1, len(narration_slots))
 
-    for slot_text in narration_slots:
+    for slot_i, slot_text in enumerate(narration_slots):
         slot_tokens = set(re.findall(r"[a-z0-9]{3,}", normalize_text(slot_text)))
+        expected_pos = (slot_i / max(1, n_slots - 1)) * max(1, n_cat - 1)
         best_idx = -1
-        best_score = -1.0
+        best_score = -999.0
 
         for idx, sc in enumerate(scenes):
             sc_tokens = set(re.findall(r"[a-z0-9]{3,}", normalize_text(sc.description)))
             overlap = len(slot_tokens & sc_tokens)
             score = float(overlap * 3)
+            score -= abs(idx - expected_pos) * 0.35
+            if "[action]" in sc.description.lower():
+                score += 5.0
+            if "[weak]" in sc.description.lower():
+                score -= 8.0
             if sc.is_contextual:
                 score += 1.5
             if idx in used_indices:
                 score -= 10.0
-            if chosen and chosen[-1].video_path == sc.video_path and abs(chosen[-1].start - sc.start) < 1.0:
-                score -= 20.0
             if score > best_score:
                 best_score = score
                 best_idx = idx
 
         if best_idx < 0:
-            best_idx = len(chosen) % len(scenes)
+            best_idx = min(n_cat - 1, int(round(expected_pos)))
         used_indices.add(best_idx)
-        chosen.append(scenes[best_idx])
+        chosen_ids.append(best_idx)
 
-    return chosen
+    unique_vids = {s.video_path for s in scenes}
+    if len(unique_vids) <= 3:
+        chosen_ids = _enforce_chronological_continuity(chosen_ids, scenes)
+
+    return [scenes[i] for i in chosen_ids]
 
 
 def match_scenes_to_narration(
@@ -353,154 +405,76 @@ def match_scenes_to_narration(
     log_cb: LogCallback | None = None,
 ) -> list[tuple[Path, float, int, int]]:
     """
-    Casa semanticamente cada janela de fala da narração com a melhor cena indexada via Ollama,
-    evitando repetições e priorizando os vídeos contextuais da pauta!
+    Casa semanticamente cada janela de fala da narração com a melhor cena indexada,
+    GARANTINDO continuidade cronológica real (nunca volta no relógio do jogo/história!).
     """
     if not indexed_scenes:
         return []
 
+    ordered_scenes = sorted(
+        indexed_scenes,
+        key=lambda sc: (0 if sc.is_contextual else 1, sc.video_path.name, sc.start),
+    )
+
     narration_slots = _build_narration_slots(word_timings, total_duration, num_scenes)
-    ollama_url = str(config.get("ollama_url", "http://localhost:11434"))
     text_model = str(config.get("ollama_modelo", "qwen3:8b"))
 
     catalog_lines = []
-    for idx, sc in enumerate(indexed_scenes):
+    for idx, sc in enumerate(ordered_scenes):
         src_tag = "[CONTEXTO_NOTICIA]" if sc.is_contextual else "[BIBLIOTECA]"
-        catalog_lines.append(f"{idx}: {src_tag} {sc.description}")
+        catalog_lines.append(f"{idx}: [t={sc.start:.0f}s] {src_tag} {sc.description}")
 
     slots_lines = [f"SLOT {i}: \"{txt}\"" for i, txt in enumerate(narration_slots)]
 
     prompt = f"""Você é um editor profissional de vídeo para TikTok.
-Sua tarefa é escolher a MELHOR cena visual do CATÁLOGO abaixo para cada SLOT da narração, garantindo máxima coerência visual entre o que está sendo falado e o que aparece na tela.
+Sua tarefa é escolher a MELHOR cena visual do CATÁLOGO abaixo para cada SLOT da narração, garantindo máxima coerência visual E CONTINUIDADE CRONOLÓGICA REAL!
 
 SLOTS DA NARRAÇÃO ({num_scenes} slots em ordem cronológica):
 {chr(10).join(slots_lines)}
 
-CATÁLOGO DE CENAS DISPONÍVEIS (ID: descrição):
+CATÁLOGO DE CENAS DISPONÍVEIS EM ORDEM CRONOLÓGICA (ID: [tempo] descrição):
 {chr(10).join(catalog_lines)}
 
 REGRAS ESTRITAS:
 1. Retorne APENAS um JSON válido no formato: {{"scene_ids": [id0, id1, ...]}} com EXATAMENTE {num_scenes} números inteiros.
-2. Casa semanticamente cada SLOT com a cena que melhor ilustra o que está sendo dito (ex.: falou 'prisão' -> cena de prisão; falou 'barco/pesca/praia' -> cena de barco/mar/praia; falou 'polícia/carro' -> cena de carro/polícia; falou 'gol/ataque' -> cena de jogadores/gol).
-3. Priorize cenas marcadas com [CONTEXTO_NOTICIA] quando combinarem com o texto.
-4. EVITE repetir o mesmo ID de cena (e NUNCA coloque o mesmo ID em dois slots seguidos).
+2. CONTINUIDADE CRONOLÓGICA OBRIGATÓRIA: O catálogo já está em ordem de tempo (do começo ao fim do jogo/vídeo). Apenas o SLOT 0 (gancho inicial de 3s) pode adiantar um lance de impacto/clímax. Do SLOT 1 até o último slot, os IDs escolhidos DEVEM AVANÇAR EM ORDEM CRESCENTE (ex.: 1, 2, 4, 6, 8, 10, 12...) — PROIBIDO voltar no tempo (nunca pular dos 40 minutos de volta para os 20 minutos!).
+3. SINCRONIA DE MINUTO E PLACAR: Se a descrição do frame tiver o minuto/placar (ex.: [30m 1-0], [58m 2-0], [92m 2-1]) ou ação exata (leão mordendo coco, gol, cartão vermelho), case EXATAMENTE com o SLOT que narra aquele momento!
+4. PRIORIZE FORTEMENTE cenas marcadas com [ACTION] e [CONTEXTO_NOTICIA]! EVITE AO MÁXIMO cenas marcadas com [WEAK] (telas vazias, transições, ou apresentador parado falando).
+5. EVITE repetir o mesmo ID de cena.
 
 Responda APENAS com o JSON:"""
 
     selected_scenes: list[IndexedScene] = []
     try:
         provider_lbl = config.get("gemini_modelo", "gemini-flash-lite-latest") if is_gemini_active(config) else text_model
-        _log(log_cb, f"[SceneMatcher] Sincronizando {num_scenes} trechos de fala com {len(indexed_scenes)} cenas via {provider_lbl}...")
-        raw = generate_text_llm(prompt=prompt, config=config, expect_json=True, temperature=0.25, max_tokens=500, timeout=90)
+        _log(log_cb, f"[SceneMatcher] Sincronizando {num_scenes} trechos de fala (ordem cronológica) com {len(ordered_scenes)} cenas via {provider_lbl}...")
+        raw = generate_text_llm(prompt=prompt, config=config, expect_json=True, temperature=0.2, max_tokens=500, timeout=90)
         raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL | re.IGNORECASE).strip()
         start, end = raw.find("{"), raw.rfind("}")
         parsed = json.loads(raw[start : end + 1])
         ids = parsed.get("scene_ids") or []
 
-        used_prev = -1
+        clean_ids: list[int] = []
         for slot_i in range(num_scenes):
-            raw_id = int(ids[slot_i]) if slot_i < len(ids) else (slot_i % len(indexed_scenes))
-            if raw_id < 0 or raw_id >= len(indexed_scenes):
-                raw_id = slot_i % len(indexed_scenes)
-            if raw_id == used_prev and len(indexed_scenes) > 1:
-                raw_id = (raw_id + 1) % len(indexed_scenes)
-            used_prev = raw_id
-            selected_scenes.append(indexed_scenes[raw_id])
+            raw_id = int(ids[slot_i]) if slot_i < len(ids) else min(len(ordered_scenes) - 1, int(slot_i * len(ordered_scenes) / max(1, num_scenes)))
+            if raw_id < 0 or raw_id >= len(ordered_scenes):
+                raw_id = min(len(ordered_scenes) - 1, slot_i)
+            clean_ids.append(raw_id)
 
-        # Loga amostra da sincronia para transparência no console do app
-        for i in range(min(4, len(selected_scenes))):
+        contextual_vids = {s.video_path for s in ordered_scenes if s.is_contextual}
+        if contextual_vids and len(contextual_vids) <= 3:
+            clean_ids = _enforce_chronological_continuity(clean_ids, ordered_scenes)
+
+        selected_scenes = [ordered_scenes[cid] for cid in clean_ids]
+
+        for i in range(min(5, len(selected_scenes))):
             _log(
                 log_cb,
-                f"[SceneMatcher] Cena {i+1}: \"{narration_slots[i][:42]}...\" -> "
-                f"{selected_scenes[i].video_path.name}@{selected_scenes[i].start:.1f}s ({selected_scenes[i].description[:50]})",
+                f"[SceneMatcher] Cena {i+1}: \"{narration_slots[i][:40]}...\" -> "
+                f"{selected_scenes[i].video_path.name}@{selected_scenes[i].start:.1f}s ({selected_scenes[i].description[:52]})",
             )
     except Exception as exc:
-        _log(log_cb, f"[SceneMatcher] Aviso no mapeamento LLM ({exc}). Usando casamento local por palavras-chave.")
-        selected_scenes = _fallback_keyword_match(narration_slots, indexed_scenes)
+        _log(log_cb, f"[SceneMatcher] Aviso no mapeamento LLM ({exc}). Usando casamento cronológico local.")
+        selected_scenes = _fallback_keyword_match(narration_slots, ordered_scenes)
 
     return [(sc.video_path, sc.start, sc.width, sc.height) for sc in selected_scenes]
-
-
-def match_beats_to_indexed_scenes(
-    beats: list[dict[str, Any]],
-    indexed_scenes: list[IndexedScene],
-    config: dict[str, Any],
-    source_min_t: float = 0.0,
-    log_cb: LogCallback | None = None,
-) -> list[tuple[Path, float, int, int]]:
-    """
-    Casa CADA BEAT da narração (`fala` + `o_que_mostrar` + `timestamp_ref`) diretamente com o frame REAL
-    visto pelo Gemini Vision no vídeo baixado (ou biblioteca oficial do nicho), garantindo coerência visual real!
-    """
-    if not indexed_scenes or not beats:
-        return []
-
-    n_beats = len(beats)
-    catalog_lines: list[str] = []
-    for idx, sc in enumerate(indexed_scenes):
-        if sc.is_contextual:
-            orig_t = sc.start + source_min_t
-            src_tag = f"[VIDEO_FONTE @{orig_t:.0f}s]"
-        else:
-            src_tag = f"[BROLL_OFICIAL {sc.video_path.stem[:18]}]"
-        catalog_lines.append(f"{idx}: {src_tag} {sc.description}")
-
-    beat_lines: list[str] = []
-    for i, b in enumerate(beats):
-        fala = str(b.get("fala") or "").strip()
-        vis = str(b.get("o_que_mostrar") or "").strip()
-        tref = b.get("timestamp_ref")
-        ref_txt = f" (ref ~{int(tref)}s)" if isinstance(tref, (int, float)) else ""
-        beat_lines.append(f"BEAT {i}{ref_txt}: FALA=\"{fala}\" | VISUAL_DESEJADO=\"{vis}\"")
-
-    prompt = f"""Você é um diretor de edição de vídeo viral de altíssima precisão visual.
-Para cada BEAT abaixo, escolha a ÚNICA cena do CATÁLOGO que REALMENTE mostra na tela o que a FALA e o VISUAL_DESEJADO descrevem.
-
-BEATS DA NARRAÇÃO ({n_beats} beats em ordem cronológica):
-{chr(10).join(beat_lines)}
-
-CATÁLOGO REAL DE CENAS (visto por IA de Visão):
-{chr(10).join(catalog_lines)}
-
-REGRAS ESTRITAS DE COERÊNCIA VISUAL:
-1. Retorne APENAS um JSON válido: {{"scene_ids": [id0, id1, ...]}} com EXATAMENTE {n_beats} inteiros.
-2. COERÊNCIA VISUAL ACIMA DE TUDO: leia a descrição REAL de cada cena no catálogo! Se uma cena do [VIDEO_FONTE] mostra propaganda, tela de menu, rosto falando, outro jogo ou algo sem relação com o BEAT, NÃO escolha essa cena — escolha a cena do catálogo (do [VIDEO_FONTE] ou [BROLL_OFICIAL]) que realmente combina com o texto!
-3. Quando uma cena do [VIDEO_FONTE] mostra EXATAMENTE o assunto do BEAT (especialmente perto do timestamp ref), priorize-a!
-4. Nunca coloque o mesmo ID em dois beats seguidos e evite repetir cenas sempre que houver boas alternativas.
-
-Responda APENAS com o JSON:"""
-
-    selected: list[IndexedScene] = []
-    try:
-        text_model = str(config.get("ollama_modelo", "qwen3:8b"))
-        provider_lbl = config.get("gemini_modelo", "gemini-flash-lite-latest") if is_gemini_active(config) else text_model
-        _log(log_cb, f"[SceneMatcher] Casando {n_beats} beats com {len(indexed_scenes)} cenas REAIS vistas por Visão ({provider_lbl})...")
-        raw = generate_text_llm(prompt=prompt, config=config, expect_json=True, temperature=0.15, max_tokens=1000, timeout=90)
-        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL | re.IGNORECASE).strip()
-        start, end = raw.find("{"), raw.rfind("}")
-        parsed = json.loads(raw[start : end + 1])
-        ids = parsed.get("scene_ids") or []
-
-        used_prev = -1
-        for i in range(n_beats):
-            raw_id = int(ids[i]) if i < len(ids) else (i % len(indexed_scenes))
-            if raw_id < 0 or raw_id >= len(indexed_scenes):
-                raw_id = i % len(indexed_scenes)
-            if raw_id == used_prev and len(indexed_scenes) > 1:
-                raw_id = (raw_id + 1) % len(indexed_scenes)
-            used_prev = raw_id
-            selected.append(indexed_scenes[raw_id])
-
-        for i in range(min(5, len(selected))):
-            fala_prev = str(beats[i].get("fala") or "")[:38]
-            _log(
-                log_cb,
-                f"[SceneMatcher] Beat {i+1}: \"{fala_prev}...\" -> "
-                f"{selected[i].video_path.name}@{selected[i].start:.1f}s ({selected[i].description[:55]})",
-            )
-    except Exception as exc:
-        _log(log_cb, f"[SceneMatcher] Aviso no casamento beat-a-beat ({exc}). Usando fallback local.")
-        fallback_slots = [f"{b.get('fala', '')} {b.get('o_que_mostrar', '')}" for b in beats]
-        selected = _fallback_keyword_match(fallback_slots, indexed_scenes)
-
-    return [(sc.video_path, sc.start, sc.width, sc.height) for sc in selected]

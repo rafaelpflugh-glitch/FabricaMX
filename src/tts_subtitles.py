@@ -182,19 +182,54 @@ async def _synthesize_edge_tts(
     return interpolated
 
 
+NOISE_SUBTITLE_RE = re.compile(
+    r"^(?:>+|\[.*?\]|\(.*?\)|♪+|♫+|\.{2,}|-+|_+)$",
+    flags=re.IGNORECASE,
+)
+
+
+def sanitize_word_timings(words: list[WordTiming]) -> list[WordTiming]:
+    """Remove ruídos de legenda (>>, [música], [risadas]) e elimina qualquer sobreposição temporal."""
+    cleaned: list[WordTiming] = []
+    for wt in sorted(words, key=lambda w: (w.start, w.end)):
+        txt = re.sub(r"\[[^\]]*\]", "", wt.text or "")
+        txt = txt.replace(">>", "").replace("♪", "").replace("♫", "").strip()
+        if not txt or NOISE_SUBTITLE_RE.match(txt):
+            continue
+        s = max(0.0, float(wt.start))
+        e = max(s + 0.05, float(wt.end))
+        cleaned.append(WordTiming(text=txt, start=s, end=e))
+
+    # Garante ordem estritamente monotônica sem overlaps (impede libass de empilhar legendas)
+    fixed: list[WordTiming] = []
+    for wt in cleaned:
+        s, e = wt.start, wt.end
+        if fixed:
+            prev = fixed[-1]
+            if s < prev.end:
+                # Encurta a palavra anterior para acabar exatamente quando a próxima começa
+                if s > prev.start + 0.04:
+                    prev.end = s
+                else:
+                    s = prev.end
+                    e = max(s + 0.05, e)
+        fixed.append(WordTiming(text=wt.text, start=s, end=e))
+    return fixed
+
+
 def _group_words_into_blocks(
     words: list[WordTiming],
     max_words: int = 3,
-    max_chars: int = 22,
+    max_chars: int = 16,
 ) -> list[list[WordTiming]]:
     """
-    Agrupa palavras em blocos curtos (2 a 3 palavras) respeitando pausas,
-    pontuação forte e largura visual para tela vertical 1080px.
+    Agrupa palavras em blocos curtos (1 a 3 palavras, máx ~16 chars) que SEMPRE cabem
+    em UMA ÚNICA LINHA na tela 1080px — impedindo quebra dinâmica e "dança" vertical.
     """
     if not words:
         return []
 
-    max_words = max(2, min(4, max_words))
+    max_words = max(2, min(3, max_words))
     blocks: list[list[WordTiming]] = []
     current: list[WordTiming] = []
     current_chars = 0
@@ -207,8 +242,8 @@ def _group_words_into_blocks(
             current
             and (
                 len(current) >= max_words
-                or (current_chars + 1 + word_len > max_chars and len(current) >= 2)
-                or gap_from_prev > 0.42
+                or (current_chars + 1 + word_len > max_chars)
+                or gap_from_prev > 0.38
             )
         )
 
@@ -220,18 +255,21 @@ def _group_words_into_blocks(
         current.append(wt)
         current_chars += word_len + (1 if len(current) > 1 else 0)
 
-        # Quebra natural após pontuação forte se já temos pelo menos 2 palavras (ou pausa longa depois)
+        # Quebra natural após pontuação forte
         ends_sentence = bool(re.search(r"[.!?¿¡;:]$", wt.text))
         next_gap = (words[idx + 1].start - wt.end) if idx + 1 < len(words) else 1.0
-        if ends_sentence and (len(current) >= 2 or next_gap > 0.25):
+        if ends_sentence and (len(current) >= 2 or next_gap > 0.22):
             blocks.append(current)
             current = []
             current_chars = 0
 
     if current:
-        # Evita bloco órfão de 1 palavra curta no final, mesclando se couber
         if len(current) == 1 and blocks and len(blocks[-1]) < max_words:
-            blocks[-1].extend(current)
+            cand_len = sum(len(w.text) for w in blocks[-1]) + len(blocks[-1]) + len(current[0].text)
+            if cand_len <= max_chars:
+                blocks[-1].extend(current)
+            else:
+                blocks.append(current)
         else:
             blocks.append(current)
 
@@ -242,10 +280,11 @@ def build_tiktok_ass(
     words: list[WordTiming],
     ass_path: Path,
     config: dict[str, Any],
+    pos_y: int | None = None,
 ) -> None:
     """
-    Gera arquivo .ass estilo TikTok com fonte grande em negrito, contorno preto forte
-    e destaque colorido dinâmico na palavra ativa dentro de blocos de 2 a 3 palavras.
+    Gera arquivo .ass estilo TikTok com posição 100% TRAVADA (zero pulo/dança vertical),
+    zero sobreposição entre eventos, linha única limpa e zona segura para UI do TikTok.
     """
     video_cfg = config.get("video", {})
     sub_cfg = config.get("legenda", {})
@@ -254,16 +293,27 @@ def build_tiktok_ass(
     play_y = int(video_cfg.get("altura", 1920))
 
     font_name = sub_cfg.get("fonte", "Impact")
-    font_size = int(sub_cfg.get("tamanho_fonte", 88))
-    active_ass = hex_to_ass_color(sub_cfg.get("cor_ativa", "#00F0FF"))
+    # Limita fonte a 74px para garantir linha única estável dentro da zona segura horizontal do TikTok
+    font_size = min(int(sub_cfg.get("tamanho_fonte", 74)), 74)
+    active_ass = hex_to_ass_color(sub_cfg.get("cor_ativa", "#FACC15"))
     inactive_ass = hex_to_ass_color(sub_cfg.get("cor_inativa", "#FFFFFF"))
     outline_ass = hex_to_ass_color(sub_cfg.get("cor_contorno", "#000000"))
-    outline_size = int(sub_cfg.get("espessura_contorno", 11))
+    outline_size = max(4, min(int(sub_cfg.get("espessura_contorno", 9)), 10))
     shadow_size = int(sub_cfg.get("sombra", 3))
-    words_per_block = int(sub_cfg.get("palavras_por_bloco", 3))
-    alignment = int(sub_cfg.get("alinhamento", 5))
-    margin_v = int(sub_cfg.get("margem_inferior", 0))
+    words_per_block = min(int(sub_cfg.get("palavras_por_bloco", 3)), 3)
 
+    # Zona segura TikTok (1080x1920):
+    # - Direita (x > 920) tem botões Like/Comentário/Share -> centralizamos em x=515 (leve respiro à direita)
+    # - Rodapé (y > 1560) tem legenda/descrição do TikTok -> travamos em y=1445 (ou pos_y customizado)
+    anchor_x = int(play_x * 0.485)
+    if pos_y is not None:
+        anchor_y = int(pos_y)
+    else:
+        margem_inf = int(sub_cfg.get("margem_inferior", 460))
+        # Converte margem inferior em coordenada fixa segura (entre y=1360 e y=1515)
+        anchor_y = max(1360, min(1515, play_y - max(405, margem_inf)))
+
+    # WrapStyle: 2 (sem quebra automática inesperada) + Alignment=5 (centro fixo)
     header = f"""[Script Info]
 Title: FabricaMX TikTok Subtitles
 ScriptType: v4.00+
@@ -274,43 +324,48 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: TikTok,{font_name},{font_size},{inactive_ass},{active_ass},{outline_ass},&H90000000&,-1,0,0,0,100,100,1,0,1,{outline_size},{shadow_size},{alignment},70,70,{margin_v},1
+Style: TikTok,{font_name},{font_size},{inactive_ass},{active_ass},{outline_ass},&H90000000&,-1,0,0,0,100,100,1,0,1,{outline_size},{shadow_size},5,80,140,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
-    blocks = _group_words_into_blocks(words, max_words=words_per_block, max_chars=20)
+    clean_words = sanitize_word_timings(words)
+    blocks = _group_words_into_blocks(clean_words, max_words=words_per_block, max_chars=17)
     events: list[str] = []
+    last_event_end = 0.0
 
     for b_idx, block in enumerate(blocks):
         next_block_start = blocks[b_idx + 1][0].start if b_idx + 1 < len(blocks) else None
 
+        # Se algum bloco ultrapassar 18 chars, reduz levemente a fonte só daquele bloco (sempre 1 linha!)
+        block_plain = " ".join(item.text.upper() for item in block)
+        fs_override = f"\\fs{max(58, font_size - 10)}" if len(block_plain) > 18 else ""
+
         for w_idx, wt in enumerate(block):
-            seg_start = wt.start
+            seg_start = max(last_event_end, wt.start)
             if w_idx + 1 < len(block):
-                # Contíguo sem piscar até a próxima palavra do bloco
-                seg_end = max(wt.end, block[w_idx + 1].start)
+                seg_end = max(seg_start + 0.05, block[w_idx + 1].start)
             else:
-                seg_end = wt.end + 0.08
+                seg_end = max(seg_start + 0.08, wt.end + 0.06)
                 if next_block_start is not None:
                     seg_end = min(seg_end, next_block_start)
 
-            if seg_end <= seg_start:
-                seg_end = seg_start + 0.08
+            if seg_end <= seg_start + 0.02:
+                seg_end = seg_start + 0.05
+            last_event_end = seg_end
 
-            # Monta texto destacando a palavra ativa (ciano elétrico + leve pop) e demais em branco
+            # Posição 100% travada (\an5\pos) + destaque puro por cor (SEM \fscy110 -> zero pulo vertical!)
+            prefix_tag = f"{{\\an5\\pos({anchor_x},{anchor_y}){fs_override}}}"
             parts: list[str] = []
             for j, item in enumerate(block):
                 clean_word = _escape_ass_text(item.text.upper())
                 if j == w_idx:
-                    parts.append(
-                        f"{{\\c{active_ass}\\fscx110\\fscy110}}{clean_word}{{\\c{inactive_ass}\\fscx100\\fscy100}}"
-                    )
+                    parts.append(f"{{\\c{active_ass}}}{clean_word}{{\\c{inactive_ass}}}")
                 else:
                     parts.append(f"{{\\c{inactive_ass}}}{clean_word}")
 
-            line_text = " ".join(parts)
+            line_text = prefix_tag + " ".join(parts)
             events.append(
                 f"Dialogue: 0,{_format_ass_time(seg_start)},{_format_ass_time(seg_end)},TikTok,,0,0,0,,{line_text}"
             )
@@ -345,50 +400,75 @@ def normalize_text_for_tts(text: str, idioma: str = "pt-BR") -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+def _parse_rate_percent(rate_str: str) -> int:
+    m = re.search(r"([+-]?\d+)", str(rate_str or "+0%"))
+    return int(m.group(1)) if m else 0
+
+
 def generate_narration_and_subtitles(
     script_text: str,
     work_dir: Path,
     config: dict[str, Any],
     log_cb: LogCallback | None = None,
+    pos_y: int | None = None,
 ) -> TTSResult:
     """
     Gera narração .mp3 via Edge-TTS e legendas .ass sincronizadas por palavra.
+    Inclui guarda automática de duração mínima (>= 61.5s) para monetização no TikTok.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
     audio_path = work_dir / "narration.mp3"
     ass_path = work_dir / "subtitles.ass"
 
     voice = config.get("tts_voz", "es-MX-JorgeNeural")
-    rate = config.get("tts_velocidade", "+8%")
-    pitch = config.get("tts_pitch", "+0Hz")
+    rate = str(config.get("tts_velocidade", "+8%"))
+    pitch = str(config.get("tts_pitch", "+0Hz"))
     idioma = str(config.get("idioma", "pt-BR"))
     spoken_text = normalize_text_for_tts(script_text, idioma=idioma)
 
-    _log(log_cb, f"[TTS] Gerando áudio com voz {voice} (velocidade {rate})...")
-
-    # Executa asyncio de forma segura em qualquer thread (GUI worker ou main)
-    loop = asyncio.new_event_loop()
-    try:
-        asyncio.set_event_loop(loop)
-        word_timings = loop.run_until_complete(
-            _synthesize_edge_tts(
-                text=spoken_text,
-                voice=voice,
-                rate=rate,
-                pitch=pitch,
-                audio_path=audio_path,
+    def _run_tts_once(cur_rate: str) -> tuple[list[WordTiming], float]:
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            wt = loop.run_until_complete(
+                _synthesize_edge_tts(
+                    text=spoken_text,
+                    voice=voice,
+                    rate=cur_rate,
+                    pitch=pitch,
+                    audio_path=audio_path,
+                )
             )
-        )
-    finally:
-        asyncio.set_event_loop(None)
-        loop.close()
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
+        if not audio_path.exists() or audio_path.stat().st_size < 1000:
+            raise RuntimeError("Falha ao gerar arquivo de áudio via Edge-TTS.")
+        dur = probe_audio_duration(audio_path)
+        if dur <= 0.0 and wt:
+            dur = wt[-1].end + 0.35
+        return wt, dur
 
-    if not audio_path.exists() or audio_path.stat().st_size < 1000:
-        raise RuntimeError("Falha ao gerar arquivo de áudio via Edge-TTS.")
+    _log(log_cb, f"[TTS] Gerando áudio com voz {voice} (velocidade {rate})...")
+    word_timings, duration = _run_tts_once(rate)
 
-    duration = probe_audio_duration(audio_path)
-    if duration <= 0.0 and word_timings:
-        duration = word_timings[-1].end + 0.35
+    # Guarda automática de monetização (> 60s): ativa apenas para nichos de 60s+ (não estica vídeos curtos de Facebook/Reels!)
+    video_cfg = config.get("video", {})
+    cfg_min_dur = float(video_cfg.get("duracao_alvo_min", 60))
+    min_target_sec = cfg_min_dur + 1.5
+    if cfg_min_dur >= 55.0 and duration < min_target_sec and len(spoken_text.split()) >= 110:
+        cur_pct = _parse_rate_percent(rate)
+        cur_factor = max(0.75, 1.0 + cur_pct / 100.0)
+        desired_sec = max(min_target_sec + 1.2, 63.0)
+        new_factor = cur_factor * (duration / desired_sec)
+        new_pct = max(-10, min(cur_pct - 2, int(round((new_factor - 1.0) * 100))))
+        if new_pct < cur_pct:
+            new_rate = f"{new_pct:+d}%"
+            _log(
+                log_cb,
+                f"[TTS] Áudio ficou em {duration:.1f}s (< 61.5s). Recalibrando ritmo para {new_rate} para passar de 1 minuto...",
+            )
+            word_timings, duration = _run_tts_once(new_rate)
 
     if not word_timings:
         _log(log_cb, "[TTS] Aviso: sem eventos WordBoundary; interpolando legendas pela duração total.")
@@ -399,8 +479,8 @@ def generate_narration_and_subtitles(
         f"[TTS] Áudio gerado ({duration:.1f}s) com {len(word_timings)} marcações de palavra.",
     )
 
-    build_tiktok_ass(word_timings, ass_path, config)
-    _log(log_cb, f"[TTS] Legendas .ass criadas em {ass_path.name}.")
+    build_tiktok_ass(word_timings, ass_path, config, pos_y=pos_y)
+    _log(log_cb, f"[TTS] Legendas .ass travadas criadas em {ass_path.name}.")
 
     return TTSResult(
         audio_path=audio_path,

@@ -1,0 +1,168 @@
+{
+  "id": "facebook_fofoca",
+  "nome": "Facebook Reels Rápido (Fofoca & Fotos • 30s)",
+  "etiqueta": "FB REELS • FOFOCA • 30s",
+  "modo_padrao": "noticia",
+  "idioma_padrao": "pt-BR",
+  "roteiro_palavras_min": 82,
+  "roteiro_palavras_max": 115,
+  "video_override": {
+    "duracao_alvo_min": 25,
+    "duracao_alvo_max": 42,
+    "num_cenas_min": 8,
+    "num_cenas_max": 12,
+    "num_cenas_alvo": 10,
+    "preferir_fotos": true
+  },
+  "vozes": [
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Feminino • Fofoqueira)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Masculino • Rápido)",
+      "idioma": "pt-BR"
+    }
+  ],
+  "voz_padrao": "pt-BR-FranciscaNeural",
+  "foco_padrao": "Fofoca Relâmpago (Geral)",
+  "presets_foco": {
+    "Fofoca Relâmpago (Geral)": [
+      "Virginia",
+      "Neymar",
+      "Anitta",
+      "flagra",
+      "affair",
+      "namoro",
+      "término",
+      "polêmica",
+      "Leo Dias",
+      "famosos"
+    ],
+    "Casais & Flagras": [
+      "flagra",
+      "affair",
+      "romance",
+      "juntos",
+      "beijo",
+      "casal",
+      "Virginia",
+      "Neymar"
+    ],
+    "Tretas & Indiretas": [
+      "treta",
+      "indireta",
+      "rebateu",
+      "exposed",
+      "polêmica",
+      "desabafo"
+    ],
+    "Novelas & BBB": [
+      "BBB",
+      "Globo",
+      "novela",
+      "bastidores",
+      "atriz",
+      "ator"
+    ]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "Leo Dias flagra famosos namoro polêmica",
+  "rss_feeds": [
+    {
+      "nome": "Portal Leo Dias Famosos (Direto)",
+      "url": "https://portalleodias.com/famosos/feed"
+    },
+    {
+      "nome": "Portal Leo Dias Geral (Direto)",
+      "url": "https://portalleodias.com/feed"
+    },
+    {
+      "nome": "Metrópoles Fábia Oliveira (Direto)",
+      "url": "https://www.metropoles.com/colunas/fabia-oliveira/feed"
+    },
+    {
+      "nome": "Hugo Gloss (Direto)",
+      "url": "https://hugogloss.uol.com.br/feed/"
+    },
+    {
+      "nome": "Metrópoles Entretenimento (Direto)",
+      "url": "https://www.metropoles.com/entretenimento/feed"
+    },
+    {
+      "nome": "Splash UOL Entretenimento (Direto)",
+      "url": "https://rss.uol.com.br/feed/entretenimento.xml"
+    },
+    {
+      "nome": "Terra Diversão (Direto)",
+      "url": "https://www.terra.com.br/diversao/rss.xml"
+    }
+  ],
+  "canais_adaptador": [
+    {
+      "nome": "LeoDias TV",
+      "channel_id": "UCZ4L4kbUSHhBvw0gXDgh6Vg"
+    }
+  ],
+  "canais_corte": [
+    {
+      "nome": "LeoDias TV",
+      "channel_id": "UCZ4L4kbUSHhBvw0gXDgh6Vg"
+    }
+  ],
+  "yt_busca_adaptador": "Leo Dias TV famosos flagra polemica",
+  "yt_busca_corte": "Leo Dias TV famosos revelacao",
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 74,
+    "cor_ativa": "#FACC15",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 9,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 5,
+    "margem_inferior": 470
+  },
+  "imagem_ancoras": [
+    "famosos",
+    "celebridade",
+    "brasil",
+    "evento",
+    "flagra"
+  ],
+  "imagem_sufixo_padrao": "foto recente Brasil",
+  "imagem_fallbacks": [
+    "Virginia Fonseca foto recente evento",
+    "Neymar foto recente evento",
+    "celebridades Brasil tapete vermelho foto"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é uma página de fofoca super rápida, ácida e divertida de Facebook Reels! Vídeos curtinhos de 30 segundos: já abre entregando o babado na lata ('Gente, olha esse flagra!'), passa foto dela, foto dele, solta o detalhe mais quente com emoção e fecha jogando a bomba nos comentários!",
+    "regras_fatos": "Fale apenas fatos reais da matéria. Em termos_busca_imagens, SEMPRE separe buscas individuais para CADA pessoa mencionada (ex.: 2 buscas com nome dela, 2 buscas com nome dele, 2 buscas do lugar/evento) para o vídeo ir trocando entre a foto dela, a foto dele e o videozinho!",
+    "cta_meio_pt": "Já curte e segue a página porque o próximo babado já tá saindo!",
+    "hashtags_padrao": [
+      "#Fofoca",
+      "#Famosos",
+      "#ReelsBrasil",
+      "#Babado",
+      "#Celebridades",
+      "#PortalLeoDias"
+    ]
+  },
+  "top5_banco": [],
+  "palavras_chave": [
+    "Virginia",
+    "Neymar",
+    "Anitta",
+    "flagra",
+    "affair",
+    "namoro",
+    "término",
+    "polêmica",
+    "Leo Dias",
+    "famosos"
+  ]
+}

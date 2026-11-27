@@ -16,10 +16,10 @@ from src import BASE_DIR
 SECRETS_PATH = BASE_DIR / "secrets.json"
 
 GEMINI_MODELS = [
-    "gemini-flash-lite-latest",
     "gemini-flash-latest",
-    "gemini-3.8-flash",
-    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
 ]
 DEFAULT_GEMINI_MODEL = GEMINI_MODELS[0]
 
@@ -99,18 +99,26 @@ def _call_gemini_rest(
             candidates_order.append(m_clean)
 
     last_err = ""
+    per_model_timeout = max(25, min(int(timeout), 48))
     for idx, candidate_model in enumerate(candidates_order):
         endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent"
-        resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout)
+        try:
+            resp = requests.post(endpoint, headers=headers, json=payload, timeout=per_model_timeout)
+        except requests.exceptions.RequestException as exc:
+            last_err = f"Timeout/Rede ({candidate_model}): {exc}"
+            if idx + 1 < len(candidates_order):
+                time.sleep(0.5)
+                continue
+            raise RuntimeError(f"Gemini API timeout/erro de rede: {last_err}") from exc
 
         if resp.status_code in (401, 403):
             raise RuntimeError(
                 "Chave da Gemini API inválida ou sem permissão. Gere uma grátis em aistudio.google.com/apikey."
             )
-        if resp.status_code in (404, 429, 503):
+        if resp.status_code in (404, 429, 500, 502, 503, 504):
             last_err = f"HTTP {resp.status_code} ({candidate_model}): {resp.text[:220]}"
             if idx + 1 < len(candidates_order):
-                time.sleep(0.8)
+                time.sleep(0.6)
                 continue
             if resp.status_code == 429:
                 raise RuntimeError(
@@ -153,15 +161,29 @@ def generate_text_llm(
     if is_gemini_active(config):
         api_key = str(config.get("gemini_api_key") or "").strip() or load_gemini_api_key()
         model = str(config.get("gemini_modelo") or DEFAULT_GEMINI_MODEL).strip()
-        return _call_gemini_rest(
-            prompt=prompt,
-            model=model,
-            api_key=api_key,
-            expect_json=expect_json,
-            temperature=temperature,
-            max_tokens=max(8192, max_tokens),
-            timeout=min(timeout, 120),
-        )
+        try:
+            return _call_gemini_rest(
+                prompt=prompt,
+                model=model,
+                api_key=api_key,
+                expect_json=expect_json,
+                temperature=temperature,
+                max_tokens=max(8192, max_tokens),
+                timeout=min(timeout, 48),
+            )
+        except RuntimeError as exc:
+            # Se a chave for inválida (401/403), informa o usuário imediatamente;
+            # em caso de timeout/503/429 da API, faz fallback automático para o Ollama Local se disponível!
+            msg = str(exc)
+            if "inválida" in msg or "permissão" in msg:
+                raise
+            try:
+                ollama_url = str(config.get("ollama_url", "http://localhost:11434"))
+                ping = requests.get(f"{ollama_url.rstrip('/')}/api/tags", timeout=2)
+                if ping.status_code != 200:
+                    raise exc
+            except Exception:
+                raise exc
 
     # Ollama Local
     ollama_url = str(config.get("ollama_url", "http://localhost:11434"))
@@ -215,9 +237,14 @@ def describe_frames_batch_gemini(
     n = len(frames_b64)
 
     prompt = (
-        f"You are analyzing {n} video frames from a {niche_hint} video, in order from 0 to {n - 1}.\n"
+        f"You are analyzing {n} video frames from a {niche_hint} video, in chronological order from 0 to {n - 1}.\n"
         f"Return ONLY a JSON object: {{\"descriptions\": [\"desc0\", \"desc1\", ...]}} with EXACTLY {n} short, "
-        f"concrete descriptions (10-18 words each) naming characters, actions, objects, and locations."
+        f"concrete descriptions (12-22 words each) naming WHO is visibly on screen (exact people/characters by appearance, e.g. boy, girl, teacher, players), their facial expressions, exact action, objects, and setting.\n"
+        f"IMPORTANT RULES:\n"
+        f"1. If a sports scoreboard/clock is visible in the frame, INCLUDE the exact match minute and score in brackets right after the tag, e.g. '[ACTION][30m 1-0] Yellow player shoots from outside the box' or '[ACTION][92m 2-1] Header goal'.\n"
+        f"2. If a frame is visually boring/empty (blank background, sponsor card, text-only slide, blurred transition, "
+        f"or just a presenter talking with no action/object shown), START with '[WEAK] '. "
+        f"If it clearly shows strong visual action or expressive faces/reactions (goal, shot, red card, celebration, dialogue close-up, shocked face, argument, hug), START with '[ACTION] '."
     )
     raw = _call_gemini_rest(
         prompt=prompt,

@@ -1,0 +1,108 @@
+{
+  "id": "moldura_viral",
+  "nome": "Moldura Viral (Garotas Góticas • Estilo Página ✓)",
+  "etiqueta": "GÓTICAS BR • MOLDURA",
+  "canal_nome": "GÓTICAS BR",
+  "moldura_escura": false,
+  "modo_padrao": "moldura_viral",
+  "idioma_padrao": "pt-BR",
+  "vozes": [
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Masculino)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Feminino)",
+      "idioma": "pt-BR"
+    }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "Garotas Góticas / Estética Alt (Dark)",
+  "presets_foco": {
+    "Garotas Góticas / Estética Alt (Dark)": [
+      "goth girl",
+      "garota gotica",
+      "goth aesthetic",
+      "goth fashion",
+      "alt style",
+      "dark makeup"
+    ],
+    "Beleza, Moda & Lifestyle Viral": [
+      "beauty",
+      "fashion",
+      "outfit transition",
+      "estilo",
+      "look viral"
+    ],
+    "Humor & Reações (Estilo Página Meme)": [
+      "humor",
+      "reacao",
+      "pegadinha",
+      "viral",
+      "comedia"
+    ],
+    "Motos, Carros & Grau (Estilo Nu Grau)": [
+      "moto",
+      "grau",
+      "supercar",
+      "reaction",
+      "viral"
+    ]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "goth fashion aesthetic style",
+  "rss_feeds": [],
+  "canais_adaptador": [],
+  "canais_corte": [],
+  "yt_busca_adaptador": "goth girl aesthetic outfit transition shorts",
+  "yt_busca_corte": "goth girl aesthetic outfit transition shorts",
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 64,
+    "cor_ativa": "#A855F7",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 8,
+    "sombra": 2,
+    "palavras_por_bloco": 3,
+    "alinhamento": 5,
+    "margem_inferior": 420
+  },
+  "imagem_ancoras": [
+    "goth",
+    "fashion",
+    "aesthetic",
+    "style",
+    "dark"
+  ],
+  "imagem_sufixo_padrao": "goth aesthetic fashion portrait",
+  "imagem_fallbacks": [
+    "goth fashion aesthetic outfit dark style",
+    "alternative dark fashion makeup portrait"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é o criador de uma página viral brasileira de estética gótica, beleza, estilo e humor no TikTok/Reels/Shorts.",
+    "regras_fatos": "Crie frases curtas, chamativas e 100% coerentes com o clipe exibido, dentro das diretrizes do TikTok e YouTube.",
+    "cta_meio_pt": "Já segue a página porque todo dia sai vídeo novo!",
+    "hashtags_padrao": [
+      "#Goticas",
+      "#GothAesthetic",
+      "#EstiloGotico",
+      "#AltStyle",
+      "#Viral",
+      "#Shorts",
+      "#Reels",
+      "#TikTokBrasil"
+    ]
+  },
+  "top5_banco": [],
+  "palavras_chave": [
+    "goth girl",
+    "garota gotica",
+    "goth aesthetic",
+    "goth fashion",
+    "alt style"
+  ]
+}

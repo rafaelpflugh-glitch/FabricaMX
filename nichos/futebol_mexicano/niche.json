@@ -5,17 +5,90 @@
   "modo_padrao": "noticia",
   "idioma_padrao": "es-MX",
   "vozes": [
-    { "id": "es-MX-JorgeNeural", "label": "ES-MX • Jorge (Masculino)", "idioma": "es-MX" },
-    { "id": "es-MX-DaliaNeural", "label": "ES-MX • Dalia (Feminino)", "idioma": "es-MX" }
+    {
+      "id": "es-MX-JorgeNeural",
+      "label": "ES-MX • Jorge (Masculino)",
+      "idioma": "es-MX"
+    },
+    {
+      "id": "es-MX-DaliaNeural",
+      "label": "ES-MX • Dalia (Feminino)",
+      "idioma": "es-MX"
+    }
   ],
   "voz_padrao": "es-MX-JorgeNeural",
-  "foco_padrao": "Club América",
+  "foco_padrao": "Clásico Nacional (América vs Chivas)",
   "presets_foco": {
-    "Club América": ["Club América", "América", "Águilas", "Coapa", "Jardine", "Liga MX"],
-    "Chivas": ["Chivas", "Guadalajara", "Rebaño Sagrado", "Akron", "Liga MX"],
-    "Cruz Azul": ["Cruz Azul", "La Máquina", "Celestes", "La Noria", "Liga MX"],
-    "Tigres": ["Tigres", "UANL", "Felinos", "Volcán", "Gignac", "Liga MX"],
-    "Liga MX Geral": ["Liga MX", "Fútbol Mexicano", "Selección Mexicana", "Liguilla", "Clausura", "Apertura"]
+    "Club América": [
+      "Club América",
+      "América",
+      "Águilas",
+      "Coapa",
+      "Jardine",
+      "Liga MX"
+    ],
+    "Clásico Nacional (América vs Chivas)": [
+      "América vs Chivas",
+      "Clásico Nacional",
+      "Club América",
+      "Chivas",
+      "Guadalajara",
+      "Liga MX"
+    ],
+    "Clásico Joven (América vs Cruz Azul)": [
+      "América vs Cruz Azul",
+      "Clásico Joven",
+      "Club América",
+      "Cruz Azul",
+      "La Máquina",
+      "Liga MX"
+    ],
+    "América vs Monterrey (Rayados)": [
+      "América vs Monterrey",
+      "Rayados",
+      "Club América",
+      "Monterrey",
+      "Liguilla",
+      "Liga MX"
+    ],
+    "Clásico Regio (Tigres vs Rayados)": [
+      "Tigres vs Monterrey",
+      "Clásico Regio",
+      "Tigres",
+      "Rayados",
+      "Monterrey",
+      "Liga MX"
+    ],
+    "Chivas": [
+      "Chivas",
+      "Guadalajara",
+      "Rebaño Sagrado",
+      "Akron",
+      "Liga MX"
+    ],
+    "Cruz Azul": [
+      "Cruz Azul",
+      "La Máquina",
+      "Celestes",
+      "La Noria",
+      "Liga MX"
+    ],
+    "Tigres": [
+      "Tigres",
+      "UANL",
+      "Felinos",
+      "Volcán",
+      "Gignac",
+      "Liga MX"
+    ],
+    "Liga MX Geral": [
+      "Liga MX",
+      "Fútbol Mexicano",
+      "Selección Mexicana",
+      "Liguilla",
+      "Clausura",
+      "Apertura"
+    ]
   },
   "ddgs_regiao": "mx-es",
   "ddgs_news_sufixo": "Liga MX noticias",
@@ -30,10 +103,24 @@
     }
   ],
   "canais_adaptador": [
-    { "nome": "TUDN México", "channel_id": "UCTIyEyDNHPrwVFPhpi5dm0A" }
+    {
+      "nome": "Liga BBVA MX Oficial",
+      "channel_id": "UCq8BPLXtFeiSFOvmJrknWGg"
+    },
+    {
+      "nome": "TUDN México",
+      "channel_id": "UCTIyEyDNHPrwVFPhpi5dm0A"
+    },
+    {
+      "nome": "Azteca Deportes",
+      "channel_id": "UCe3Ev4a4Sm9L5aO9sJJ_WXw"
+    }
   ],
   "canais_corte": [
-    { "nome": "TUDN México", "channel_id": "UCTIyEyDNHPrwVFPhpi5dm0A" }
+    {
+      "nome": "TUDN México",
+      "channel_id": "UCTIyEyDNHPrwVFPhpi5dm0A"
+    }
   ],
   "yt_busca_adaptador": "Club America Liga MX goles resumen TUDN",
   "yt_busca_corte": "Club America Liga MX goles resumen polemica",
@@ -49,7 +136,19 @@
     "alinhamento": 2,
     "margem_inferior": 395
   },
-  "imagem_ancoras": ["futbol", "soccer", "liga mx", "jugador", "gol", "partido", "cancha", "remate", "celebracion", "portero", "estadio"],
+  "imagem_ancoras": [
+    "futbol",
+    "soccer",
+    "liga mx",
+    "jugador",
+    "gol",
+    "partido",
+    "cancha",
+    "remate",
+    "celebracion",
+    "portero",
+    "estadio"
+  ],
   "imagem_sufixo_padrao": "jugadores gol accion partido Liga MX",
   "imagem_fallbacks": [
     "Club America jugadores celebrando gol partido Liga MX",
@@ -60,10 +159,16 @@
     "Portero atajada espectacular partido futbol Liga MX"
   ],
   "prompt_contexto": {
-    "persona_es": "Eres el creador viral más explosivo de TikTok sobre fútbol mexicano (Liga MX), con ritmo de debate apasionado, frases cortas que enganchan al segundo y cero relleno.",
-    "regras_fatos": "En la Liga MX actual NO existe el descenso. Usa solo datos reales de jugadores, clubes y partidos. Prioriza acciones, goles, jugadas polémicas y rivalidades.",
-    "cta_meio_es": "Pero antes de revelarte el cierre, sígueme porque aquí solo sale lo más caliente del fútbol mexicano.",
-    "hashtags_padrao": ["#LigaMX", "#FutbolMexicano", "#ClubAmerica", "#TikTokDeportes", "#FutbolMX"]
+    "persona_es": "Eres el creador viral más picante y provocador de TikTok sobre fútbol mexicano (Liga MX). Enciendes la rivalidad sana entre aficiones (América vs Chivas, Cruz Azul, Pumas, Rayados y Tigres) con burla inteligente, datos reales, carrilla futbolera y debate que hace explotar los comentarios.",
+    "regras_fatos": "En la Liga MX actual NO existe el descenso. Usa solo datos reales de jugadores, títulos, eliminaciones y clásicos. Provoca debate sano entre aficiones rivales.",
+    "cta_meio_es": "Pero antes de soltar el golpe más duro del cierre, sígueme porque aquí la carrilla de la Liga MX no perdona a nadie.",
+    "hashtags_padrao": [
+      "#LigaMX",
+      "#FutbolMexicano",
+      "#ClubAmerica",
+      "#TikTokDeportes",
+      "#FutbolMX"
+    ]
   },
   "top5_banco": [
     {
@@ -131,5 +236,13 @@
         "Jorge Campos portero atajada Pumas futbol mexicano"
       ]
     }
+  ],
+  "palavras_chave": [
+    "América vs Chivas",
+    "Clásico Nacional",
+    "Club América",
+    "Chivas",
+    "Guadalajara",
+    "Liga MX"
   ]
 }

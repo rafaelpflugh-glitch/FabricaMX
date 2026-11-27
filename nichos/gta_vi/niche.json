@@ -5,19 +5,64 @@
   "modo_padrao": "adaptador_yt",
   "idioma_padrao": "pt-BR",
   "vozes": [
-    { "id": "pt-BR-AntonioNeural", "label": "PT-BR • Antonio (Masculino)", "idioma": "pt-BR" },
-    { "id": "pt-BR-FranciscaNeural", "label": "PT-BR • Francisca (Feminino)", "idioma": "pt-BR" },
-    { "id": "en-US-AndrewNeural", "label": "EN-US • Andrew (RPM Dólar)", "idioma": "en-US" },
-    { "id": "en-US-GuyNeural", "label": "EN-US • Guy (Energetic)", "idioma": "en-US" },
-    { "id": "es-MX-JorgeNeural", "label": "ES-MX • Jorge (LATAM)", "idioma": "es-MX" }
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Masculino)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Feminino)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "en-US-AndrewNeural",
+      "label": "EN-US • Andrew (RPM Dólar)",
+      "idioma": "en-US"
+    },
+    {
+      "id": "en-US-GuyNeural",
+      "label": "EN-US • Guy (Energetic)",
+      "idioma": "en-US"
+    },
+    {
+      "id": "es-MX-JorgeNeural",
+      "label": "ES-MX • Jorge (LATAM)",
+      "idioma": "es-MX"
+    }
   ],
   "voz_padrao": "pt-BR-AntonioNeural",
   "foco_padrao": "GTA VI Geral",
   "presets_foco": {
-    "GTA VI Geral": ["GTA VI", "GTA 6", "Rockstar Games", "Vice City", "Leonida", "Lucia", "Jason"],
-    "Vazamentos & Rumores": ["GTA 6 vazamento", "GTA VI leak", "Rockstar", "mapa GTA 6", "trailer 2"],
-    "Gameplay & Mapa": ["GTA 6 gameplay", "Vice City", "Leonida", "carros GTA 6", "gráficos GTA VI"],
-    "Lucia & Jason": ["Lucia GTA 6", "Jason GTA 6", "história GTA VI", "protagonistas GTA 6"]
+    "GTA VI Geral": [
+      "GTA VI",
+      "GTA 6",
+      "Rockstar Games",
+      "Vice City",
+      "Leonida",
+      "Lucia",
+      "Jason"
+    ],
+    "Vazamentos & Rumores": [
+      "GTA 6 vazamento",
+      "GTA VI leak",
+      "Rockstar",
+      "mapa GTA 6",
+      "trailer 2"
+    ],
+    "Gameplay & Mapa": [
+      "GTA 6 gameplay",
+      "Vice City",
+      "Leonida",
+      "carros GTA 6",
+      "gráficos GTA VI"
+    ],
+    "Lucia & Jason": [
+      "Lucia GTA 6",
+      "Jason GTA 6",
+      "história GTA VI",
+      "protagonistas GTA 6"
+    ]
   },
   "ddgs_regiao": "br-pt",
   "ddgs_news_sufixo": "GTA 6 Rockstar Games noticias",
@@ -48,13 +93,28 @@
     }
   ],
   "canais_adaptador": [
-    { "nome": "gameranx", "channel_id": "UCNvzD7Z-g64bPXxGzaQaa4g" },
-    { "nome": "IGN", "channel_id": "UCKy1dAqELo0zrOtPkf0eTMw" },
-    { "nome": "Gigaton Games", "channel_id": "UCAjKLSz8h3XJM5CSJWvmoNA" }
+    {
+      "nome": "gameranx",
+      "channel_id": "UCNvzD7Z-g64bPXxGzaQaa4g"
+    },
+    {
+      "nome": "IGN",
+      "channel_id": "UCKy1dAqELo0zrOtPkf0eTMw"
+    },
+    {
+      "nome": "Gigaton Games",
+      "channel_id": "UCAjKLSz8h3XJM5CSJWvmoNA"
+    }
   ],
   "canais_corte": [
-    { "nome": "Alanzoka", "channel_id": "UCIwspRtKNszHhIhl36gREjQ" },
-    { "nome": "Gigaton Games", "channel_id": "UCAjKLSz8h3XJM5CSJWvmoNA" }
+    {
+      "nome": "Alanzoka",
+      "channel_id": "UCIwspRtKNszHhIhl36gREjQ"
+    },
+    {
+      "nome": "Gigaton Games",
+      "channel_id": "UCAjKLSz8h3XJM5CSJWvmoNA"
+    }
   ],
   "yt_busca_adaptador": "GTA 6 things details secrets gameranx IGN",
   "yt_busca_corte": "GTA 6 gameplay momentos engraçados alanzoka",
@@ -70,7 +130,18 @@
     "alinhamento": 2,
     "margem_inferior": 395
   },
-  "imagem_ancoras": ["gta", "grand theft auto", "rockstar", "vice city", "leonida", "lucia", "jason", "trailer", "gameplay", "screenshot"],
+  "imagem_ancoras": [
+    "gta",
+    "grand theft auto",
+    "rockstar",
+    "vice city",
+    "leonida",
+    "lucia",
+    "jason",
+    "trailer",
+    "gameplay",
+    "screenshot"
+  ],
   "imagem_sufixo_padrao": "GTA 6 Rockstar Games Vice City screenshot 4K",
   "imagem_fallbacks": [
     "GTA 6 Lucia Jason Vice City official Rockstar screenshot",
@@ -88,7 +159,14 @@
     "cta_meio_pt": "Mas antes de ver o detalhe mais absurdo no final, já me segue porque aqui sai tudo de GTA 6 antes de todo mundo.",
     "cta_meio_en": "Before I reveal the craziest detail at number one, hit follow for daily GTA 6 breakdowns.",
     "cta_meio_es": "Pero antes de revelar el detalle más loco del final, sígueme porque aquí sale todo de GTA 6 al instante.",
-    "hashtags_padrao": ["#GTAVI", "#GTA6", "#RockstarGames", "#ViceCity", "#GamesTikTok", "#GamerBR"]
+    "hashtags_padrao": [
+      "#GTAVI",
+      "#GTA6",
+      "#RockstarGames",
+      "#ViceCity",
+      "#GamesTikTok",
+      "#GamerBR"
+    ]
   },
   "top5_banco": [
     {
@@ -156,5 +234,14 @@
         "GTA 6 official logo Vice City palm trees sunset"
       ]
     }
+  ],
+  "palavras_chave": [
+    "GTA VI",
+    "GTA 6",
+    "Rockstar Games",
+    "Vice City",
+    "Leonida",
+    "Lucia",
+    "Jason"
   ]
 }

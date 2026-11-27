@@ -33,6 +33,60 @@ XFADE_TRANSITIONS = [
     "slideright",
 ]
 
+VIDEO_FILTER_PRESETS: dict[str, dict[str, str]] = {
+    "vivido2": {
+        "label": "Vívido 2 (Viral TikTok • Recomendado)",
+        "vf": (
+            "eq=contrast=1.14:brightness=0.02:saturation=1.34:gamma=1.03,"
+            "colorbalance=rs=0.02:gs=0.01:bs=0.03:rm=0.03:gm=0.01:bm=-0.02:rh=0.04:gh=0.02:bh=-0.02,"
+            "unsharp=5:5:0.75:3:3:0.35"
+        ),
+    },
+    "vivido_hdr": {
+        "label": "HDR Ultra Nítido (Futebol / Gameplay)",
+        "vf": (
+            "eq=contrast=1.20:brightness=0.01:saturation=1.38:gamma=1.02,"
+            "colorbalance=rs=-0.02:bs=0.04:rh=0.05:gh=0.02:bh=-0.02,"
+            "unsharp=5:5:1.05:3:3:0.45"
+        ),
+    },
+    "cinema_teal_orange": {
+        "label": "Cinema Teal & Orange (Dramático)",
+        "vf": (
+            "eq=contrast=1.16:brightness=-0.01:saturation=1.18,"
+            "colorbalance=rs=-0.06:gs=0.01:bs=0.08:rm=0.04:gm=0.00:bm=-0.03:rh=0.08:gh=0.02:bh=-0.06,"
+            "unsharp=5:5:0.55:3:3:0.20"
+        ),
+    },
+    "neon_vice": {
+        "label": "Neon Vice (GTA VI / Cyber)",
+        "vf": (
+            "eq=contrast=1.18:brightness=0.01:saturation=1.42:gamma=1.02,"
+            "colorbalance=rs=0.04:gs=-0.03:bs=0.08:rh=0.06:gh=-0.02:bh=0.06,"
+            "unsharp=5:5:0.70:3:3:0.30"
+        ),
+    },
+    "quente_tv": {
+        "label": "Quente & Limpo (TV / Cortes)",
+        "vf": (
+            "eq=contrast=1.09:brightness=0.02:saturation=1.18:gamma=1.03,"
+            "colorbalance=rm=0.03:gm=0.01:bm=-0.02:rh=0.04:gh=0.02:bh=-0.03,"
+            "unsharp=5:5:0.55:3:3:0.25"
+        ),
+    },
+    "nenhum": {
+        "label": "Original (Sem Filtro)",
+        "vf": "eq=contrast=1.04:saturation=1.05",
+    },
+}
+
+
+def get_video_filter_chain(filter_id: str | None) -> tuple[str, str]:
+    """Retorna (label_legivel, cadeia_vf_ffmpeg) para o filtro de cor escolhido."""
+    key = str(filter_id or "vivido2").strip().lower()
+    preset = VIDEO_FILTER_PRESETS.get(key) or VIDEO_FILTER_PRESETS["vivido2"]
+    return preset["label"], preset["vf"]
+
 
 def _log(log_cb: LogCallback | None, msg: str) -> None:
     if log_cb:
@@ -139,7 +193,7 @@ def create_hook_banner_png(
     badge_font = _load_windows_font(size=26, bold=True)
 
     clean_hook = (hook_text or "NOVIDADE!").strip().upper()
-    card_margin_x = 64
+    card_margin_x = 76
     card_w = width - (card_margin_x * 2)
     text_max_w = card_w - 72
 
@@ -152,9 +206,10 @@ def create_hook_banner_png(
     line_spacing = 12
     total_text_h = sum(line_heights) + line_spacing * (len(lines) - 1)
     pad_top, pad_bottom = 38, 28
-    card_h = min(200, total_text_h + pad_top + pad_bottom)
+    card_h = min(195, total_text_h + pad_top + pad_bottom)
 
-    card_x0, card_y0 = card_margin_x, 128
+    # Zona segura superior do TikTok (abaixo da barra 'Seguindo | Para você' em y~165)
+    card_x0, card_y0 = card_margin_x, 188
     card_x1, card_y1 = card_x0 + card_w, card_y0 + card_h
 
     draw.rounded_rectangle((card_x0 + 6, card_y0 + 8, card_x1 + 6, card_y1 + 8), radius=24, fill=(0, 0, 0, 150))
@@ -387,7 +442,7 @@ def render_video(
     config: dict[str, Any],
     broll_videos: list[Path] | None = None,
     matched_scenes: list[tuple[Path, float, int, int]] | None = None,
-    scene_durations: list[float] | None = None,
+    timed_scenes: list[dict[str, Any]] | None = None,
     placar_texto: str = "",
     log_cb: LogCallback | None = None,
     progress_cb: ProgressCallback | None = None,
@@ -402,8 +457,14 @@ def render_video(
     - Queima banner superior opcional (acima do viewport), placar opcional (abaixo) e legendas .ass.
     """
     video_cfg = config.get("video", {})
-    width = int(video_cfg.get("largura", 1080))
-    height = int(video_cfg.get("altura", 1920))
+    fmt_choice = str(video_cfg.get("formato_tela", "auto")).strip().lower()
+    if fmt_choice == "1x1":
+        width, height, aspect_str, dar_expr = 1080, 1080, "1:1", "1/1"
+    else:
+        width = int(video_cfg.get("largura", 1080))
+        height = int(video_cfg.get("altura", 1920))
+        aspect_str = "9:16"
+        dar_expr = "9/16"
     fps = int(video_cfg.get("fps", 30))
     trans_dur = min(float(video_cfg.get("duracao_transicao", 0.18)), 0.30)
     usar_banner_topo = bool(video_cfg.get("usar_banner_topo", True))
@@ -412,7 +473,8 @@ def render_video(
     music_vol = float(video_cfg.get("volume_musica", 0.20))
     usar_musica = bool(video_cfg.get("usar_musica", True))
     usar_intro = bool(video_cfg.get("usar_intro", True))
-    target_scenes = max(12, min(22, int(video_cfg.get("num_cenas_alvo", 18))))
+    preferir_fotos = bool(video_cfg.get("preferir_fotos", False))
+    target_scenes = max(6, min(22, int(video_cfg.get("num_cenas_alvo", 18))))
 
     niche_id = str(config.get("nicho_ativo", "gta_vi"))
     niche_name = str(config.get("nicho_nome", "Fábrica TK"))
@@ -453,16 +515,25 @@ def render_video(
                 f"[VideoEngine] Trilha pulsante do nicho '{niche_id}' ativada (vol {int(music_vol * 100)}%).",
             )
 
-    # 3) Marca d'água opcional
-    branding_path = _pick_random_asset(brand_dirs, (".png",))
+    # 3) Marca d'água / Logo do canal opcional (aceita PNG transparente ou JPG/WEBP em assets/branding/)
+    branding_path = _pick_random_asset(brand_dirs, (".png", ".jpg", ".jpeg", ".webp"))
     if branding_path:
-        _log(log_cb, f"[VideoEngine] Marca d'água: {branding_path.name}")
+        _log(log_cb, f"[VideoEngine] Logo do canal aplicado: {branding_path.name}")
 
-    # 4) Banner superior limpo (posicionado acima do viewport 1080x1080)
+    # 4) Banner superior limpo (posicionado na zona segura superior do TikTok/Reels)
     banner_png: Path | None = None
     if usar_banner_topo and gancho_tela:
         banner_png = work_dir / "hook_banner.png"
-        accent = (255, 46, 209) if niche_id == "gta_vi" else (250, 204, 21)
+        niche_accent_map = {
+            "gta_vi": (255, 46, 209),
+            "virais_mundo": (249, 115, 22),
+            "fofoca_famosos": (236, 72, 153),
+            "facebook_fofoca": (59, 130, 246),
+            "recap_comedia": (168, 85, 247),
+            "futebol_rivalidade": (34, 197, 94),
+            "musica_gear": (245, 158, 11),
+        }
+        accent = niche_accent_map.get(niche_id, (250, 204, 21))
         create_hook_banner_png(
             hook_text=gancho_tela,
             output_path=banner_png,
@@ -479,11 +550,17 @@ def render_video(
         create_scoreboard_png(placar_texto.strip(), scoreboard_png, width=width, height=height)
         _log(log_cb, f"[VideoEngine] Placar em tela: '{placar_texto.strip()}'")
 
-    # 6) Monta lista de cenas (prioridade: cenas sincronizadas semanticamente -> B-Roll distribuído -> fallback fotos HD)
+    # 6) Monta lista de cenas (sincronia exata Fala<->Cena / híbrido / sincronia semântica / B-Roll / fallback fotos)
     scenes: list[dict[str, Any]] = []
     video_list = list(broll_videos or [])
     pre_matched = list(matched_scenes or [])
-    num_slots = len(pre_matched) if pre_matched else (target_scenes if video_list else len(image_paths))
+    pre_timed = list(timed_scenes or [])
+    if pre_timed:
+        num_slots = len(pre_timed)
+    elif preferir_fotos and image_paths:
+        num_slots = min(max(6, target_scenes), len(image_paths) + (3 if video_list else 0))
+    else:
+        num_slots = len(pre_matched) if pre_matched else (target_scenes if video_list else len(image_paths))
     if num_slots <= 0:
         raise ValueError("Nenhuma cena (vídeo ou imagem) disponível para renderização.")
 
@@ -492,7 +569,40 @@ def render_video(
     seg_frames = max(int(round(max(2.0, raw_seg_dur) * fps)), int(round((trans_dur + 0.9) * fps)))
     seg_dur = seg_frames / float(fps)
 
-    if pre_matched:
+    if pre_timed:
+        for sc_idx, ts_item in enumerate(pre_timed):
+            item_dur = max(trans_dur + 0.9, float(ts_item.get("dur", seg_dur)))
+            # Adiciona trans_dur (exceto na última cena) para que o xfade ocorra no timestamp exato da troca de fala!
+            if sc_idx < len(pre_timed) - 1:
+                item_dur += trans_dur
+            sc_copy = dict(ts_item)
+            sc_copy["dur"] = item_dur
+            scenes.append(sc_copy)
+        _log(
+            log_cb,
+            f"[VideoEngine] MODO SINCRONIA FALA ↔ IMAGEM: {len(scenes)} cenas cronológicas "
+            f"alinhadas exatamente aos timestamps da narração!",
+        )
+    elif preferir_fotos and image_paths:
+        # Estilo Facebook/Fofoca: alterna fotos HD dos envolvidos (foto dela, foto dele, evento) + videozinhos curtos!
+        vid_slices = build_video_scene_slices(video_list, num_scenes=max(2, num_slots // 3), scene_dur=seg_dur + 0.15) if video_list else []
+        img_i, vid_i = 0, 0
+        for slot in range(num_slots):
+            use_vid = bool(vid_slices) and (slot % 3 == 2) and vid_i < len(vid_slices)
+            if use_vid:
+                vf, v_start, vw, vh = vid_slices[vid_i]
+                scenes.append({"type": "video", "path": vf, "start": v_start, "w": vw, "h": vh})
+                vid_i += 1
+            else:
+                img_p = image_paths[img_i % len(image_paths)]
+                scenes.append({"type": "image", "path": img_p})
+                img_i += 1
+        _log(
+            log_cb,
+            f"[VideoEngine] MODO HÍBRIDO FOTOS + CLIPES: {img_i} fotos HD + {vid_i} trechos de vídeo "
+            f"({seg_dur:.2f}s cada)!",
+        )
+    elif pre_matched:
         for vf, v_start, vw, vh in pre_matched:
             scenes.append({"type": "video", "path": vf, "start": v_start, "w": vw, "h": vh})
         _log(
@@ -507,7 +617,7 @@ def render_video(
         _log(
             log_cb,
             f"[VideoEngine] MODO 100% VÍDEO REAL HD: {len(scenes)} cenas em movimento "
-            f"({seg_dur:.2f}s cada, enquadramento 1:1 nítido sem zoom excessivo)!",
+            f"({seg_dur:.2f}s cada, tela cheia 9:16)!",
         )
 
     if not scenes:
@@ -517,20 +627,6 @@ def render_video(
             log_cb,
             f"[VideoEngine] Modo fotos HD: {len(scenes)} cenas ({seg_dur:.2f}s cada, zoom suave 4%).",
         )
-
-    # Calcula duração individual por cena (se beat-sync exato fornecido, senão uniforme)
-    per_scene_durs: list[float] = []
-    if scene_durations and len(scene_durations) == len(scenes):
-        # Ajusta proporcionalmente para cobrir exatamente o áudio + overlaps de xfade
-        needed_sum = total_target_dur - intro_dur + (num_segments - 1) * trans_dur
-        raw_sum = sum(max(1.2, float(d)) for d in scene_durations)
-        scale_f = needed_sum / max(1.0, raw_sum)
-        for d in scene_durations:
-            d_adj = max(trans_dur + 0.75, float(d) * scale_f)
-            d_frames = max(int(round(d_adj * fps)), int(round((trans_dur + 0.75) * fps)))
-            per_scene_durs.append(d_frames / float(fps))
-    else:
-        per_scene_durs = [seg_dur] * len(scenes)
 
     # Entradas FFmpeg
     inputs: list[str] = []
@@ -542,13 +638,14 @@ def render_video(
         intro_idx = idx_counter
         idx_counter += 1
 
-    scene_entries: list[tuple[int, dict[str, Any], float]] = []
-    for sc, sc_dur in zip(scenes, per_scene_durs):
+    scene_entries: list[tuple[int, dict[str, Any]]] = []
+    for sc in scenes:
+        cur_dur = float(sc.get("dur", seg_dur))
         if sc["type"] == "video":
-            inputs.extend(["-ss", f"{sc['start']:.2f}", "-t", f"{sc_dur + 0.35:.2f}", "-i", str(sc["path"])])
+            inputs.extend(["-ss", f"{sc['start']:.2f}", "-t", f"{cur_dur + 0.30:.2f}", "-i", str(sc["path"])])
         else:
             inputs.extend(["-i", str(sc["path"])])
-        scene_entries.append((idx_counter, sc, sc_dur))
+        scene_entries.append((idx_counter, sc))
         idx_counter += 1
 
     banner_idx: int | None = None
@@ -583,68 +680,97 @@ def render_video(
     filter_lines: list[str] = []
     segment_labels: list[tuple[str, float]] = []
 
+    norm_tail = f"fps={fps},settb=AVTB,scale=in_range=auto:out_range=tv:out_color_matrix=bt709,format=yuv420p,setsar=1"
+
     if intro_idx is not None:
         filter_lines.append(
             f"[{intro_idx}:v]"
             f"trim=start=0:duration={intro_dur:.3f},setpts=PTS-STARTPTS,"
             f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
             f"crop={width}:{height},"
-            f"fps={fps},settb=AVTB,format=yuv420p,setsar=1[seg_intro]"
+            f"{norm_tail}[seg_intro]"
         )
         segment_labels.append(("seg_intro", intro_dur))
 
-    # Posição do viewport HD 1080x1080 no canvas 1080x1920 (y=360..1440)
-    vp_y = 360
+    # Enquadramento TELA CHEIA 9:16 nativa TikTok (1080x1920) para notícias, futebol e gameplay
+    filter_label, color_vf = get_video_filter_chain(video_cfg.get("filtro_cor", "vivido2"))
+    _log(log_cb, f"[VideoEngine] Filtro visual: {filter_label}")
+    denom = max(1, seg_frames - 1)
 
-    for i, (in_idx, sc, sc_dur) in enumerate(scene_entries):
+    # Posição do viewport amplo 16:9 -> 9:16:
+    # - Em novelas/comédia/fofoca (recap_comedia, fofoca_famosos, facebook_fofoca), ROSTOS E PESSOAS são o foco principal!
+    #   Usamos viewport cinema 1080x820 (preserva ~75% da largura real da cena — mostra 2 pessoas frente a frente sem cortar rostos!)
+    #   posicionado no centro limpo (y=445..1265), com fundo escuro suave (sem vídeo duplicado brilhante distraindo atrás!)
+    #   e foco vertical no terço superior (0.28) onde sempre estão as cabeças/rostos.
+    is_face_first = niche_id in ("recap_comedia", "fofoca_famosos", "facebook_fofoca", "tv_realities")
+    vp_h_wide = 820 if is_face_first else 1040
+    vp_y_wide = 445 if is_face_first else 315
+    fg_y_bias = 0.28 if is_face_first else 0.40
+    bg_brightness = -0.58 if is_face_first else -0.44
+    bg_blur = "22:3" if is_face_first else "14:2"
+
+    for i, (in_idx, sc) in enumerate(scene_entries):
         label = f"seg_{i:02d}"
-        sc_frames = max(int(round(sc_dur * fps)), int(round((trans_dur + 0.75) * fps)))
-        denom = max(1, sc_frames - 1)
+        cur_dur = float(sc.get("dur", seg_dur))
+        cur_frames = max(int(round(cur_dur * fps)), int(round((trans_dur + 0.9) * fps)))
+        cur_dur = cur_frames / float(fps)
+        cur_denom = max(1, cur_frames - 1)
         if sc["type"] == "video":
             vw = int(sc.get("w", 1920))
             vh = int(sc.get("h", 1080))
-            if vh > vw:
-                # Clipe já é vertical 9:16 -> tela cheia direta
+            if vh >= vw:
+                # Clipe já é vertical ou quadrado -> tela cheia 9:16 direta + filtro visual
                 filter_lines.append(
                     f"[{in_idx}:v]"
-                    f"trim=start=0:duration={sc_dur:.3f},setpts=PTS-STARTPTS,"
+                    f"trim=start=0:duration={cur_dur:.3f},setpts=PTS-STARTPTS,"
                     f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
-                    f"crop={width}:{height},"
-                    f"fps={fps},settb=AVTB,format=yuv420p,setsar=1[{label}]"
+                    f"crop={width}:{height},{color_vf},"
+                    f"{norm_tail}[{label}]"
                 )
             else:
-                # Clipe 16:9 HD -> fundo atmosférico borrado rápido + viewport 1080x1080 nítido (1:1 nativo!)
-                filter_lines.append(
-                    f"[{in_idx}:v]"
-                    f"trim=start=0:duration={sc_dur:.3f},setpts=PTS-STARTPTS,"
-                    f"fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw_{i}][fraw_{i}]"
-                )
-                filter_lines.append(
-                    f"[braw_{i}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
-                    f"boxblur=8:2,scale={width}:{height}:flags=bilinear,"
-                    f"eq=brightness=-0.32:saturation=1.18[bg_{i}]"
-                )
-                filter_lines.append(
-                    f"[fraw_{i}]scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
-                    f"crop={width}:{width},eq=contrast=1.05:saturation=1.08[fg_{i}]"
-                )
-                filter_lines.append(
-                    f"[bg_{i}][fg_{i}]overlay=0:{vp_y},"
-                    f"drawbox=x=0:y={vp_y - 3}:w={width}:h=3:color=white@0.28:t=fill,"
-                    f"drawbox=x=0:y={vp_y + width}:w={width}:h=3:color=white@0.28:t=fill,"
-                    f"format=yuv420p,setsar=1[{label}]"
-                )
+                if height <= width + 100:
+                    # Modo Quadrado 1:1 limpo (sem barras borradas, igual @highlightsmx!)
+                    filter_lines.append(
+                        f"[{in_idx}:v]"
+                        f"trim=start=0:duration={cur_dur:.3f},setpts=PTS-STARTPTS,"
+                        f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
+                        f"crop={width}:{height}:(iw-ow)/2:(ih-oh)*0.45,{color_vf},"
+                        f"{norm_tail}[{label}]"
+                    )
+                else:
+                    # Clipe 16:9 HD -> enquadramento amplo inteligente (preserva ~65% da largura real, ZERO corte cego da ação!)
+                    # Remove apenas 6% da borda inferior (tarjas) e posiciona viewport 1080x1140 nítido sobre fundo borrado 9:16
+                    filter_lines.append(
+                        f"[{in_idx}:v]"
+                        f"trim=start=0:duration={cur_dur:.3f},setpts=PTS-STARTPTS,"
+                        f"crop=iw:ih*0.94:0:0,fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw_{i}][fraw_{i}]"
+                    )
+                    filter_lines.append(
+                        f"[braw_{i}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
+                        f"boxblur={bg_blur},scale={width}:{height}:flags=bilinear,"
+                        f"eq=brightness={bg_brightness}:saturation=0.85[bg_{i}]"
+                    )
+                    filter_lines.append(
+                        f"[fraw_{i}]scale={width}:{vp_h_wide}:force_original_aspect_ratio=increase:flags=lanczos,"
+                        f"crop={width}:{vp_h_wide}:(iw-ow)/2:(ih-oh)*{fg_y_bias},{color_vf}[fg_{i}]"
+                    )
+                    filter_lines.append(
+                        f"[bg_{i}][fg_{i}]overlay=0:{vp_y_wide},"
+                        f"drawbox=x=0:y={vp_y_wide - 2}:w={width}:h=2:color=white@0.22:t=fill,"
+                        f"drawbox=x=0:y={vp_y_wide + vp_h_wide}:w={width}:h=2:color=white@0.22:t=fill,"
+                        f"{norm_tail}[{label}]"
+                    )
         else:
-            # Fallback foto HD: zoom ultra-suave (apenas 4%, sem distorção!)
-            z_expr = f"1.0+0.04*(on/{denom})" if i % 2 == 0 else f"1.04-0.04*(on/{denom})"
+            # Foto HD sincronizada: zoom ultra-suave (3% máximo — nunca corta rostos nem bordas importantes!)
+            z_expr = f"1.0+0.03*(on/{cur_denom})" if i % 2 == 0 else f"1.03-0.03*(on/{cur_denom})"
             filter_lines.append(
                 f"[{in_idx}:v]"
-                f"scale=1140:2026:flags=lanczos,"
+                f"scale=1114:1980:force_original_aspect_ratio=increase:flags=lanczos,crop=1114:1980,"
                 f"zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-                f"d={sc_frames}:s={width}x{height}:fps={fps},"
-                f"setpts=PTS-STARTPTS,settb=AVTB,fps={fps},format=yuv420p,setsar=1[{label}]"
+                f"d={cur_frames}:s={width}x{height}:fps={fps},"
+                f"{color_vf},setpts=PTS-STARTPTS,{norm_tail}[{label}]"
             )
-        segment_labels.append((label, sc_dur))
+        segment_labels.append((label, cur_dur))
 
     # Transições rápidas xfade
     if len(segment_labels) == 1:
@@ -664,8 +790,8 @@ def render_video(
             cum_dur = offset + next_dur
 
     if branding_idx is not None:
-        filter_lines.append(f"[{branding_idx}:v]scale=160:-1,format=rgba,colorchannelmixer=aa=0.80[wm]")
-        filter_lines.append(f"[{current_v}][wm]overlay=W-w-36:48[v_wm]")
+        filter_lines.append(f"[{branding_idx}:v]scale=185:-1,format=rgba,colorchannelmixer=aa=0.92[wm]")
+        filter_lines.append(f"[{current_v}][wm]overlay=W-w-36:56[v_wm]")
         current_v = "v_wm"
 
     if scoreboard_idx is not None:
@@ -685,7 +811,12 @@ def render_video(
         current_v = "v_banner"
 
     escaped_ass = escape_ffmpeg_filter_path(ass_path)
-    filter_lines.append(f"[{current_v}]ass=filename='{escaped_ass}',format=yuv420p[vout]")
+    # Legendas limpas com contorno forte (SEM faixa cinza atravessando o vídeo!) + aspect ratio exato (9:16 ou 1:1)
+    filter_lines.append(
+        f"[{current_v}]"
+        f"ass=filename='{escaped_ass}',"
+        f"scale={width}:{height},setsar=1,setdar={dar_expr},format=yuv420p[vout]"
+    )
 
     # Mixagem de áudio
     if music_idx is not None:
@@ -730,6 +861,8 @@ def render_video(
         f"{total_target_dur:.3f}",
         "-r",
         str(fps),
+        "-aspect",
+        aspect_str,
         "-c:v",
         "libx264",
         "-preset",
@@ -845,8 +978,14 @@ def render_original_cut_video(
     - Legendas .ass sincronizadas com a fala original logo abaixo do viewport
     """
     video_cfg = config.get("video", {})
-    width = int(video_cfg.get("largura", 1080))
-    height = int(video_cfg.get("altura", 1920))
+    fmt_choice = str(video_cfg.get("formato_tela", "auto")).strip().lower()
+    if fmt_choice == "1x1":
+        width, height, aspect_str, dar_expr = 1080, 1080, "1:1", "1/1"
+    else:
+        width = int(video_cfg.get("largura", 1080))
+        height = int(video_cfg.get("altura", 1920))
+        aspect_str = "9:16"
+        dar_expr = "9/16"
     fps = int(video_cfg.get("fps", 30))
 
     niche_id = str(config.get("nicho_ativo", "tv_realities"))
@@ -862,6 +1001,9 @@ def render_original_cut_video(
     banner_png = work_dir / "cut_hook_banner.png"
     accent_map = {
         "gta_vi": (255, 46, 209),
+        "virais_mundo": (249, 115, 22),
+        "fofoca_famosos": (236, 72, 153),
+        "facebook_fofoca": (59, 130, 246),
         "musica_gear": (245, 158, 11),
         "tv_realities": (250, 204, 21),
     }
@@ -882,29 +1024,33 @@ def render_original_cut_video(
         inputs.extend(["-i", str(branding_path)])
         branding_idx = 2
 
-    vp_y = 360
+    # Enquadramento limpo sem cortar rostos (y=430..1330, altura 900px) dentro das zonas seguras do TikTok:
+    # - Topo seguro (y=188..385): card do gancho sem tampar cabeças
+    # - Centro (y=430..1330): vídeo 16:9 amplo sem legendas originais da TV
+    # - Base segura (y=1465): nossa legenda .ass travada 100% fora do vídeo
+    vp_y = 430
+    vp_h = 900
     escaped_ass = escape_ffmpeg_filter_path(ass_path)
-    # No nicho TV & Realities, corta 7% da borda inferior do vídeo 16:9 original para eliminar legendas antigas da Band
-    if niche_id == "tv_realities":
-        fg_filter = (
-            f"[fraw]crop=iw:ih*0.92:0:0,"
-            f"scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
-            f"crop={width}:{width},eq=contrast=1.05:saturation=1.06[fg]"
-        )
-    else:
-        fg_filter = (
-            f"[fraw]scale={width}:{width}:force_original_aspect_ratio=increase:flags=lanczos,"
-            f"crop={width}:{width},eq=contrast=1.05:saturation=1.06[fg]"
-        )
+    # Corta 18% do rodapé em TV & Realities (remove legendas embutidas da Band/MasterChef/Pesadelo)
+    # e 12% nos demais cortes 16:9 para eliminar legendas/tarjas originais.
+    filter_label, color_vf = get_video_filter_chain(video_cfg.get("filtro_cor", "vivido2"))
+    _log(log_cb, f"[VideoEngine] Filtro visual (corte): {filter_label}")
+    keep_ratio = 0.82 if niche_id == "tv_realities" else 0.88
+    fg_filter = (
+        f"[fraw]crop=iw:ih*{keep_ratio:.2f}:0:0,"
+        f"scale={width}:{vp_h}:force_original_aspect_ratio=increase:flags=lanczos,"
+        f"crop={width}:{vp_h},{color_vf}[fg]"
+    )
 
     filter_lines = [
-        f"[0:v]fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw][fraw]",
-        f"[braw]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
-        f"boxblur=8:2,scale={width}:{height}:flags=bilinear,eq=brightness=-0.32:saturation=1.18[bg]",
+        f"[0:v]setpts=PTS-STARTPTS,fps={fps},settb=AVTB,format=yuv420p,setsar=1,split=2[braw][fraw]",
+        f"[braw]crop=iw:ih*{keep_ratio:.2f}:0:0,"
+        f"scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
+        f"boxblur=10:2,scale={width}:{height}:flags=bilinear,eq=brightness=-0.36:saturation=1.15[bg]",
         fg_filter,
         f"[bg][fg]overlay=0:{vp_y},"
         f"drawbox=x=0:y={vp_y - 3}:w={width}:h=3:color=white@0.28:t=fill,"
-        f"drawbox=x=0:y={vp_y + width}:w={width}:h=3:color=white@0.28:t=fill[v_base]",
+        f"drawbox=x=0:y={vp_y + vp_h}:w={width}:h=3:color=white@0.28:t=fill[v_base]",
         "[v_base][1:v]overlay=0:0[v_bn]",
     ]
     cur_v = "v_bn"
@@ -913,8 +1059,11 @@ def render_original_cut_video(
         filter_lines.append(f"[{cur_v}][wm]overlay=W-w-36:48[v_wm]")
         cur_v = "v_wm"
 
-    filter_lines.append(f"[{cur_v}]ass=filename='{escaped_ass}',format=yuv420p[vout]")
-    filter_lines.append("[0:a]loudnorm=I=-15:TP=-1.5:LRA=11,alimiter=limit=0.95[aout]")
+    # Crava 1080x1920 9:16 exato (corrige display_aspect_ratio=480:853!)
+    filter_lines.append(
+        f"[{cur_v}]ass=filename='{escaped_ass}',scale={width}:{height},setsar=1,setdar=9/16,format=yuv420p[vout]"
+    )
+    filter_lines.append("[0:a]asetpts=PTS-STARTPTS,loudnorm=I=-15:TP=-1.5:LRA=11,alimiter=limit=0.95[aout]")
 
     filter_script_path = work_dir / "filter_cut.txt"
     filter_script_path.write_text(";\n".join(filter_lines), encoding="utf-8")
@@ -939,6 +1088,8 @@ def render_original_cut_video(
         f"{max(5.0, clip_duration):.3f}",
         "-r",
         str(fps),
+        "-aspect",
+        aspect_str,
         "-c:v",
         "libx264",
         "-preset",

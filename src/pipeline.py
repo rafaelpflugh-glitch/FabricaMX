@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from src import HISTORY_PATH, TEMP_DIR, append_history
-from src.media_fetcher import fetch_and_prepare_images
+from src.highlights_engine import run_highlights_pro_pipeline
+from src.meme_frame_engine import run_moldura_viral_pipeline
+from src.media_fetcher import fetch_and_prepare_images, fetch_images_for_scenes
 from src.scene_matcher import index_video_pool, match_scenes_to_narration
 from src.scraper import NewsArticle, fetch_next_news
 from src.scriptwriter import ScriptPackage, generate_script, pick_next_top5_topic
@@ -120,6 +122,84 @@ class FabricaPipeline:
             custom_video_url = str(self.config.get("video_url_opcional") or "").strip()
             placar_texto = str(self.config.get("placar_opcional") or "").strip()
 
+            # ==================== MODO MOLDURA PÁGINA VIRAL (LOGO + SELO ✓ + FRASE + VÍDEO) ====================
+            if modo == "moldura_viral":
+                self._check_cancelled()
+                self._progress(1, f"{prefix}1/5 Moldura Viral (Clipe + IA)", 0.10)
+                self._log(f"{prefix}Modo Moldura Página Viral (Logo + Selo ✓ + Frase no Topo) [{niche_name}]...")
+
+                def _on_mv_pct(ratio: float) -> None:
+                    self._progress(5, f"{prefix}5/5 Render Moldura ({int(ratio * 100)}%)", 0.45 + 0.55 * ratio)
+
+                mp4_path, txt_path, article, script = run_moldura_viral_pipeline(
+                    config=self.config,
+                    work_dir=job_dir,
+                    exclude_urls=exclude_urls,
+                    custom_url=custom_video_url,
+                    headline_override=placar_texto,
+                    log_cb=self._log,
+                    progress_cb=_on_mv_pct,
+                    stop_event=self.stop_event,
+                )
+                if self.on_preview:
+                    self.on_preview(article, script)
+                if mp4_path.exists() and mp4_path.stat().st_size > 10_000:
+                    append_history(
+                        url=article.url,
+                        title=article.title,
+                        source=article.source,
+                        output_file=mp4_path.name,
+                        history_path=history_path,
+                    )
+                self._progress(5, f"{prefix}Concluído!", 1.0)
+                return BatchItemResult(
+                    index=batch_index,
+                    success=True,
+                    article=article,
+                    script=script,
+                    mp4_path=mp4_path,
+                    txt_path=txt_path,
+                )
+
+            # ==================== MODO HIGHLIGHTS FUTEBOL PRO (ÁUDIO ORIGINAL NOS GOLS!) ====================
+            if modo == "highlights_pro":
+                self._check_cancelled()
+                self._progress(1, f"{prefix}1/5 Highlights Pro (Cronológico)", 0.08)
+                self._log(f"{prefix}Modo Highlights Futebol Pro (Pontapé Inicial → Gols c/ Áudio Original → Apito Final)...")
+
+                def _on_hl_pct(ratio: float) -> None:
+                    self._progress(5, f"{prefix}5/5 Render Highlights Pro ({int(ratio * 100)}%)", 0.65 + 0.35 * ratio)
+
+                mp4_path, txt_path, article, script = run_highlights_pro_pipeline(
+                    config=self.config,
+                    work_dir=job_dir,
+                    exclude_urls=exclude_urls,
+                    custom_url=custom_video_url,
+                    placar_opcional=placar_texto,
+                    log_cb=self._log,
+                    progress_cb=_on_hl_pct,
+                    stop_event=self.stop_event,
+                )
+                if self.on_preview:
+                    self.on_preview(article, script)
+                if mp4_path.exists() and mp4_path.stat().st_size > 10_000:
+                    append_history(
+                        url=article.url,
+                        title=article.title,
+                        source=article.source,
+                        output_file=mp4_path.name,
+                        history_path=history_path,
+                    )
+                self._progress(5, f"{prefix}Concluído!", 1.0)
+                return BatchItemResult(
+                    index=batch_index,
+                    success=True,
+                    article=article,
+                    script=script,
+                    mp4_path=mp4_path,
+                    txt_path=txt_path,
+                )
+
             # ==================== MODO CORTADOR VIRAL (ÁUDIO ORIGINAL) ====================
             if modo == "corte_original":
                 self._check_cancelled()
@@ -145,7 +225,8 @@ class FabricaPipeline:
                 self._progress(3, f"{prefix}3/5 Gerando legendas .ass", 0.58)
 
                 ass_path = job_dir / "cut_subtitles.ass"
-                build_tiktok_ass(cut_plan.word_timings, ass_path, self.config)
+                # Posição Y=1465 fica limpa logo abaixo do viewport 430..1330 e acima da UI do TikTok
+                build_tiktok_ass(cut_plan.word_timings, ass_path, self.config, pos_y=1465)
                 self._log(f"{prefix}[CortadorViral] Legendas sincronizadas com {len(cut_plan.word_timings)} palavras originais.")
                 self._progress(5, f"{prefix}5/5 Render FFmpeg", 0.72)
 
@@ -211,30 +292,43 @@ class FabricaPipeline:
                     work_dir=job_dir,
                     config=self.config,
                     log_cb=self._log,
+                    pos_y=1445,
                 )
-                self._progress(5, f"{prefix}5/5 Render FFmpeg", 0.74)
 
-                # Calcula a duração EXATA de cada beat a partir dos timestamps reais de palavra do Edge-TTS!
-                beat_durations: list[float] | None = None
-                if adapted.beats and len(adapted.beats) == len(adapted.matched_scenes) and tts_result.word_timings:
-                    wt_list = tts_result.word_timings
-                    total_w = len(wt_list)
-                    beat_word_counts = [max(1, len(str(b.get("fala") or "").split())) for b in adapted.beats]
-                    sum_bw = max(1, sum(beat_word_counts))
-                    beat_durations = []
-                    cursor_w = 0
-                    prev_end_t = 0.0
-                    for idx_b, bwc in enumerate(beat_word_counts):
-                        if idx_b == len(beat_word_counts) - 1:
-                            end_t = float(tts_result.duration)
-                        else:
-                            scaled_w = max(1, int(round((bwc / sum_bw) * total_w)))
-                            end_idx = min(total_w - 1, cursor_w + scaled_w - 1)
-                            end_t = float(wt_list[end_idx].end)
-                            cursor_w = min(total_w - 1, end_idx + 1)
-                        dur_b = max(1.4, end_t - prev_end_t)
-                        beat_durations.append(round(dur_b, 3))
-                        prev_end_t = max(prev_end_t + 0.5, end_t)
+                # Etapa 4/5: IA Visão olha os frames reais das janelas baixadas para mostrar EXATAMENTE
+                # a ação narrada (ex.: leão esmagando o coco, crocodilo mordendo sensor) e descartar frames vazios!
+                self._progress(4, f"{prefix}4/5 Sincronia IA Visão", 0.60)
+                source_parts = adapted.source_video_paths or [adapted.source_video_path]
+                final_matched = adapted.matched_scenes
+                try:
+                    target_adp_scenes = max(14, min(20, int(round(tts_result.duration / 3.4))))
+                    est_slot_dur = max(2.4, (tts_result.duration + 0.35) / target_adp_scenes)
+                    indexed_adp = index_video_pool(
+                        contextual_videos=source_parts,
+                        library_videos=[],
+                        scene_dur=est_slot_dur,
+                        work_dir=job_dir,
+                        config=self.config,
+                        log_cb=self._log,
+                    )
+                    if indexed_adp:
+                        vision_matched = match_scenes_to_narration(
+                            word_timings=tts_result.word_timings,
+                            total_duration=tts_result.duration,
+                            num_scenes=target_adp_scenes,
+                            indexed_scenes=indexed_adp,
+                            config=self.config,
+                            log_cb=self._log,
+                        )
+                        if vision_matched:
+                            final_matched = vision_matched
+                            self._log(
+                                f"{prefix}[AdaptadorYT] IA Visão selecionou {len(final_matched)} cenas de AÇÃO REAL sincronizadas com a fala!"
+                            )
+                except Exception as exc:
+                    self._log(f"{prefix}[AdaptadorYT] Usando timestamps diretos ({exc}).")
+
+                self._progress(5, f"{prefix}5/5 Render FFmpeg", 0.74)
 
                 def _on_adp_pct(ratio: float) -> None:
                     self._progress(5, f"{prefix}5/5 Render FFmpeg ({int(ratio * 100)}%)", 0.74 + 0.26 * ratio)
@@ -253,9 +347,8 @@ class FabricaPipeline:
                     roteiro=script.roteiro,
                     work_dir=job_dir,
                     config=self.config,
-                    broll_videos=[adapted.source_video_path],
-                    matched_scenes=adapted.matched_scenes,
-                    scene_durations=beat_durations,
+                    broll_videos=source_parts,
+                    matched_scenes=final_matched,
                     placar_texto=placar_texto,
                     log_cb=self._log,
                     progress_cb=_on_adp_pct,
@@ -316,6 +409,7 @@ class FabricaPipeline:
                 work_dir=job_dir,
                 config=self.config,
                 log_cb=self._log,
+                pos_y=1445,
             )
             self._progress(3, f"{prefix}3/5 Voz/Legenda", 0.56)
 
@@ -324,59 +418,211 @@ class FabricaPipeline:
             self._progress(4, f"{prefix}4/5 Vídeos & Sincronia IA", 0.60)
             video_cfg = self.config.get("video", {})
             usar_broll = bool(video_cfg.get("usar_broll", True))
+            preferir_fotos = bool(video_cfg.get("preferir_fotos", False))
             custom_video_url = str(self.config.get("video_url_opcional") or "").strip()
             placar_texto = str(self.config.get("placar_opcional") or "").strip()
-            target_scenes = max(12, min(22, int(video_cfg.get("num_cenas_alvo", 18))))
+            target_scenes = max(6, min(22, int(video_cfg.get("num_cenas_alvo", 18))))
 
             contextual_videos: list[Path] = []
             library_videos: list[Path] = []
             matched_scenes: list[tuple[Path, float, int, int]] = []
+            timed_scenes: list[dict[str, Any]] = []
             broll_videos: list[Path] = []
+            image_paths: list[Path] = []
 
-            if usar_broll or custom_video_url:
-                self._log(f"{prefix}Etapa 4/5: Caçando vídeos contextuais HD + sincronizando cenas com a narração...")
-                contextual_videos, library_videos = ensure_broll_videos(
-                    config=self.config,
-                    article_title=article.title,
-                    work_dir=job_dir,
-                    custom_video_url=custom_video_url,
-                    embedded_videos=article.embedded_videos,
-                    contextual_queries=script.buscas_video_youtube,
-                    log_cb=self._log,
+            def _build_timed_hybrid_scenes(
+                cenas_list: list[dict[str, str]],
+                photo_groups: list[list[Path]],
+                word_timings_list: list[Any],
+                total_audio_dur: float,
+                clip_pool: list[Path] | None = None,
+            ) -> list[dict[str, Any]]:
+                """
+                Alinha cada cena ao segundo EXATO da fala, quebrando em batidas dinâmicas de ~2.8–3.4s
+                e mesclando FOTOS HD dos envolvidos + pequenos segmentos de VÍDEO (~3s) para retenção máxima!
+                """
+                from src.video_fetcher import build_video_scene_slices
+
+                counts = [max(1, len((c.get("fala") or "").split())) for c in cenas_list]
+                total_script_w = max(1, sum(counts))
+                n_wt = len(word_timings_list)
+
+                vid_slices = (
+                    build_video_scene_slices(clip_pool, num_scenes=max(6, len(cenas_list)), scene_dur=3.4)
+                    if clip_pool
+                    else []
                 )
-                broll_videos = contextual_videos + library_videos
+                vid_cursor = 0
 
-                if broll_videos:
-                    est_scene_dur = max(2.2, (tts_result.duration + 0.35) / target_scenes)
-                    indexed = index_video_pool(
-                        contextual_videos=contextual_videos,
-                        library_videos=library_videos,
-                        scene_dur=est_scene_dur,
-                        work_dir=job_dir,
+                out_scenes: list[dict[str, Any]] = []
+                cum_w = 0
+                prev_t = 0.0
+                for idx_c, (wc_scene, photos) in enumerate(zip(counts, photo_groups)):
+                    cum_w += wc_scene
+                    if idx_c == len(counts) - 1:
+                        end_t = total_audio_dur + 0.35
+                    elif n_wt > 0:
+                        wt_idx = min(n_wt - 1, max(0, int(round((cum_w / total_script_w) * n_wt)) - 1))
+                        end_t = max(prev_t + 1.8, float(word_timings_list[wt_idx].end))
+                    else:
+                        end_t = total_audio_dur * (cum_w / total_script_w)
+
+                    span = max(1.8, end_t - prev_t)
+                    # Quebra cenas longas em cortes dinâmicos de ~3.0s (nunca fica imagem parada por 8s!)
+                    n_beats = max(1, min(4, int(round(span / 3.1))))
+                    beat_dur = span / float(n_beats)
+
+                    for b in range(n_beats):
+                        # Mescla inteligente (~3s de vídeo + fotos exatas da cena):
+                        # - Na cena 0 (GANCHO 0-3s): se houver clipe real, abre em movimento no 1º beat!
+                        # - Nas demais cenas: intercala foto exata da pessoa -> clipe ~3s -> 2ª foto da pessoa!
+                        want_video = False
+                        if vid_slices and vid_cursor < len(vid_slices):
+                            if idx_c == 0 and b == 0 and n_beats >= 2:
+                                want_video = True
+                            elif idx_c > 0 and b == 1:
+                                want_video = True
+                            elif idx_c > 0 and n_beats == 1 and (idx_c % 3 == 2):
+                                want_video = True
+
+                        if want_video:
+                            vf, v_start, vw, vh = vid_slices[vid_cursor % len(vid_slices)]
+                            vid_cursor += 1
+                            out_scenes.append(
+                                {"type": "video", "path": vf, "start": v_start, "w": vw, "h": vh, "dur": beat_dur}
+                            )
+                        else:
+                            photo_p = photos[b % len(photos)]
+                            out_scenes.append({"type": "image", "path": photo_p, "dur": beat_dur})
+                    prev_t = end_t
+                return out_scenes
+
+            if preferir_fotos:
+                if script.cenas:
+                    self._log(f"{prefix}Etapa 4/5: Sincronia Fala ↔ Fotos + Clipes 3s ({len(script.cenas)} cenas)...")
+                    photo_groups = fetch_images_for_scenes(
+                        cenas=script.cenas,
+                        output_dir=job_dir,
                         config=self.config,
+                        og_image=article.og_image,
+                        article_images=article.article_images,
                         log_cb=self._log,
                     )
-                    if indexed:
-                        matched_scenes = match_scenes_to_narration(
-                            word_timings=tts_result.word_timings,
-                            total_duration=tts_result.duration,
-                            num_scenes=target_scenes,
-                            indexed_scenes=indexed,
+                    if usar_broll or custom_video_url:
+                        try:
+                            contextual_videos, library_videos = ensure_broll_videos(
+                                config=self.config,
+                                article_title=article.title,
+                                work_dir=job_dir,
+                                custom_video_url=custom_video_url,
+                                embedded_videos=article.embedded_videos,
+                                contextual_queries=script.buscas_video_youtube[:2],
+                                log_cb=self._log,
+                            )
+                            broll_videos = contextual_videos + library_videos
+                        except Exception as exc:
+                            self._log(f"{prefix}[B-Roll] Seguindo só com fotos HD ({exc}).")
+
+                    timed_scenes = _build_timed_hybrid_scenes(
+                        script.cenas,
+                        photo_groups,
+                        tts_result.word_timings,
+                        tts_result.duration,
+                        clip_pool=broll_videos,
+                    )
+                    image_paths = [p for g in photo_groups for p in g]
+                    n_v = sum(1 for s in timed_scenes if s["type"] == "video")
+                    n_i = sum(1 for s in timed_scenes if s["type"] == "image")
+                    self._log(
+                        f"{prefix}[Pipeline] Montagem dinâmica pronta: {n_i} cortes de foto + {n_v} segmentos de vídeo (~3s cada)!"
+                    )
+                else:
+                    self._log(f"{prefix}Etapa 4/5: Modo Fotos + Clipes Rápidos (buscando fotos HD dos envolvidos)...")
+                    image_paths = fetch_and_prepare_images(
+                        search_terms=script.termos_busca_imagens,
+                        output_dir=job_dir,
+                        config=self.config,
+                        og_image=article.og_image,
+                        article_images=article.article_images,
+                        log_cb=self._log,
+                    )
+                    if usar_broll or custom_video_url:
+                        try:
+                            contextual_videos, library_videos = ensure_broll_videos(
+                                config=self.config,
+                                article_title=article.title,
+                                work_dir=job_dir,
+                                custom_video_url=custom_video_url,
+                                embedded_videos=article.embedded_videos,
+                                contextual_queries=script.buscas_video_youtube[:2],
+                                log_cb=self._log,
+                            )
+                            broll_videos = contextual_videos + library_videos
+                        except Exception as exc:
+                            self._log(f"{prefix}[B-Roll] Seguindo só com fotos HD ({exc}).")
+            else:
+                if usar_broll or custom_video_url:
+                    self._log(f"{prefix}Etapa 4/5: Caçando vídeos contextuais HD + sincronizando cenas com a narração...")
+                    contextual_videos, library_videos = ensure_broll_videos(
+                        config=self.config,
+                        article_title=article.title,
+                        work_dir=job_dir,
+                        custom_video_url=custom_video_url,
+                        embedded_videos=article.embedded_videos,
+                        contextual_queries=script.buscas_video_youtube,
+                        log_cb=self._log,
+                    )
+                    broll_videos = contextual_videos + library_videos
+
+                    if broll_videos:
+                        est_scene_dur = max(2.2, (tts_result.duration + 0.35) / target_scenes)
+                        indexed = index_video_pool(
+                            contextual_videos=contextual_videos,
+                            library_videos=library_videos,
+                            scene_dur=est_scene_dur,
+                            work_dir=job_dir,
                             config=self.config,
                             log_cb=self._log,
                         )
+                        if indexed:
+                            matched_scenes = match_scenes_to_narration(
+                                word_timings=tts_result.word_timings,
+                                total_duration=tts_result.duration,
+                                num_scenes=target_scenes,
+                                indexed_scenes=indexed,
+                                config=self.config,
+                                log_cb=self._log,
+                            )
 
-            image_paths: list[Path] = []
-            if not broll_videos:
-                self._log(f"{prefix}Etapa 4/5: Sem clipe de vídeo — buscando fotos HD de fallback...")
-                image_paths = fetch_and_prepare_images(
-                    search_terms=script.termos_busca_imagens,
-                    output_dir=job_dir,
-                    config=self.config,
-                    og_image=article.og_image,
-                    article_images=article.article_images,
-                    log_cb=self._log,
-                )
+                if not broll_videos:
+                    if script.cenas:
+                        self._log(f"{prefix}Etapa 4/5: Sem clipe — usando sincronia Fala ↔ Foto ({len(script.cenas)} cenas)...")
+                        photo_groups = fetch_images_for_scenes(
+                            cenas=script.cenas,
+                            output_dir=job_dir,
+                            config=self.config,
+                            og_image=article.og_image,
+                            article_images=article.article_images,
+                            log_cb=self._log,
+                        )
+                        timed_scenes = _build_timed_hybrid_scenes(
+                            script.cenas,
+                            photo_groups,
+                            tts_result.word_timings,
+                            tts_result.duration,
+                            clip_pool=None,
+                        )
+                        image_paths = [p for g in photo_groups for p in g]
+                    else:
+                        self._log(f"{prefix}Etapa 4/5: Sem clipe de vídeo — buscando fotos HD de fallback...")
+                        image_paths = fetch_and_prepare_images(
+                            search_terms=script.termos_busca_imagens,
+                            output_dir=job_dir,
+                            config=self.config,
+                            og_image=article.og_image,
+                            article_images=article.article_images,
+                            log_cb=self._log,
+                        )
             self._progress(4, f"{prefix}4/5 Vídeos & Sincronia IA", 0.78)
 
             # Etapa 5/5: Render FFmpeg
@@ -403,6 +649,7 @@ class FabricaPipeline:
                 config=self.config,
                 broll_videos=broll_videos,
                 matched_scenes=matched_scenes,
+                timed_scenes=timed_scenes,
                 placar_texto=placar_texto,
                 log_cb=self._log,
                 progress_cb=_on_ffmpeg_pct,

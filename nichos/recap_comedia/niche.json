@@ -1,0 +1,157 @@
+{
+  "id": "recap_comedia",
+  "nome": "Recap Comédia (Cirilo Safadão / Alpha • Estilo JVRecap)",
+  "etiqueta": "CIRILO SAFADÃO • RECAP",
+  "modo_padrao": "adaptador_yt",
+  "idioma_padrao": "pt-BR",
+  "vozes": [
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Masculino • Narrador Alpha)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Feminino • Debochada)",
+      "idioma": "pt-BR"
+    }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "Cirilo Safadão / Alpha (Carrossel)",
+  "presets_foco": {
+    "Cirilo Safadão / Alpha (Carrossel)": [
+      "Carrossel",
+      "Cirilo",
+      "Maria Joaquina",
+      "Paulo",
+      "Valéria"
+    ],
+    "Chiquititas & Novelas SBT": [
+      "Chiquititas",
+      "SBT Novelas",
+      "Mili",
+      "Mosca",
+      "Poliana",
+      "novela"
+    ],
+    "Chaves & Séries Nostálgicas": [
+      "Chaves",
+      "Seu Madruga",
+      "Quico",
+      "Todo Mundo Odeia o Chris",
+      "Julius",
+      "comédia"
+    ],
+    "Filmes & Desenhos Recap": [
+      "recap filme",
+      "Shrek",
+      "As Branquelas",
+      "Pica-Pau",
+      "cena engraçada",
+      "comédia"
+    ]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "Carrossel Chiquititas novela cena engraçada",
+  "rss_feeds": [
+    {
+      "nome": "Google News Novelas & Nostalgia BR",
+      "url": "https://news.google.com/rss/search?q=(Carrossel+OR+Chiquititas+OR+Chaves+OR+%22Todo+Mundo+Odeia+o+Chris%22)+when:14d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    }
+  ],
+  "canais_adaptador": [
+    {
+      "nome": "Carrossel (Oficial SBT)",
+      "channel_id": "UC62chqw1TwkDl93iS8RzT1g"
+    },
+    {
+      "nome": "TV Zyn (SBT)",
+      "channel_id": "UCf_T5AbGirYAt0-90x7NM1Q"
+    },
+    {
+      "nome": "SBT Novelas",
+      "channel_id": "UCRc1QYRg0L0q53wMAvUMxyg"
+    },
+    {
+      "nome": "Turma do Chaves Oficial",
+      "channel_id": "UC2g_fQy2ogtfXESOghZhbZQ"
+    }
+  ],
+  "canais_corte": [
+    {
+      "nome": "Carrossel (Oficial SBT)",
+      "channel_id": "UC62chqw1TwkDl93iS8RzT1g"
+    },
+    {
+      "nome": "TV Zyn (SBT)",
+      "channel_id": "UCf_T5AbGirYAt0-90x7NM1Q"
+    },
+    {
+      "nome": "SBT Novelas",
+      "channel_id": "UCRc1QYRg0L0q53wMAvUMxyg"
+    }
+  ],
+  "yt_busca_adaptador": "Carrossel Cirilo Maria Joaquina cena oficial SBT TV ZYN",
+  "yt_busca_corte": "Carrossel Cirilo Maria Joaquina oficial SBT TV ZYN",
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 74,
+    "cor_ativa": "#A855F7",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 9,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 5,
+    "margem_inferior": 470
+  },
+  "imagem_ancoras": [
+    "carrossel",
+    "novela",
+    "chiquititas",
+    "chaves",
+    "serie",
+    "comedia"
+  ],
+  "imagem_sufixo_padrao": "novela SBT cena personagem",
+  "imagem_fallbacks": [
+    "Carrossel novela SBT Cirilo Maria Joaquina cena",
+    "Chiquititas novela SBT cena elenco",
+    "Chaves Seu Madruga Quico vila cena"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é o criador do fenômeno 'Cirilo Safadão / Paródia Carrossel' no TikTok Brasil (estilo @jvrecap). Você pega cenas reais de Carrossel, Chiquititas, Chaves e séries clássicas e narra historinhas hilárias de comédia e paródia — como o Cirilo tentando pegar/conquistar a Maria Joaquina na cara de pau, armando planos furados de malandragem, fazendo ciúmes ou tomando foras lendários com humor debochado brasileiro.",
+    "regras_fatos": "REGRA DE OURO DE COERÊNCIA: Narre SOMENTE os personagens que realmente aparecem no vídeo (JAMAIS invente o Cirilo ou Maria Joaquina numa cena onde eles não aparecem!). Transforme os olhares, diálogos e reações reais da cena numa historinha engraçada de paródia/comédia com começo, meio, clímax e resolução clara.",
+    "cta_meio_pt": "Mas segura que a cara de pau do final foi absurda — já me segue porque aqui sai episódio novo todo dia!",
+    "hashtags_padrao": [
+      "#CiriloSafadao",
+      "#CiriloCafajeste",
+      "#Carrossel",
+      "#MariaJoaquina",
+      "#Parodia",
+      "#Recap",
+      "#HumorBR",
+      "#TikTokBrasil"
+    ]
+  },
+  "top5_banco": [
+    {
+      "slug": "top5_momentos_cirilo_alpha_aura_infinita",
+      "tema": "5 momentos em que o Cirilo ativou o modo Alpha supremo e farmou aura infinita na Escola Mundial",
+      "foco": "Recap cômico deadpan no estilo Cirilo Alpha/Cafajeste: reinterprete com humor 5 atitudes clássicas do Cirilo em Carrossel — a frieza inabalável diante das provocações da Maria Joaquina, o olhar silencioso de quem domina a sala de aula, a lealdade de chefe com os amigos, a postura blindada contra as armações do Paulo e a forma como ele nunca perde a calma nem sob pressão.",
+      "queries": [
+        "Carrossel SBT Cirilo cena escola olhar serio",
+        "Carrossel SBT Cirilo Maria Joaquina sala de aula",
+        "Carrossel novela SBT Paulo Cirilo patio escola",
+        "Carrossel SBT turma professores sala de aula cena"
+      ]
+    }
+  ],
+  "palavras_chave": [
+    "Carrossel",
+    "Cirilo",
+    "Maria Joaquina",
+    "Paulo",
+    "Valéria"
+  ]
+}

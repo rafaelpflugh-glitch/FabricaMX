@@ -1,0 +1,182 @@
+{
+  "id": "virais_mundo",
+  "nome": "Virais do Mundo (Histórias & Emoção)",
+  "etiqueta": "VIRAIS • EMOÇÃO • 9:16",
+  "modo_padrao": "adaptador_yt",
+  "idioma_padrao": "pt-BR",
+  "vozes": [
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Masculino • Narrador)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Feminino • Emocionante)",
+      "idioma": "pt-BR"
+    }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "Resgates & Animais (Emoção)",
+  "presets_foco": {
+    "Histórias Emocionantes & Virais": [
+      "viralizou",
+      "história real",
+      "resgate",
+      "emocionante",
+      "inacreditável",
+      "flagra"
+    ],
+    "Resgates & Animais (Emoção)": [
+      "resgate animal",
+      "cachorro",
+      "animal",
+      "emocionante",
+      "salvou",
+      "viralizou"
+    ],
+    "Ciência & Engenharia Insana": [
+      "experimento",
+      "ciência",
+      "invenção",
+      "engenharia",
+      "recorde",
+      "impossível"
+    ],
+    "Mistérios & Curiosidades": [
+      "mistério",
+      "segredo",
+      "descoberta",
+      "inexplicável",
+      "bizarro",
+      "história"
+    ]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "história real viralizou emocionou web",
+  "rss_feeds": [
+    {
+      "nome": "Superinteressante (Direto)",
+      "url": "https://super.abril.com.br/feed/"
+    },
+    {
+      "nome": "Google News Virais & Emoção BR",
+      "url": "https://news.google.com/rss/search?q=(viralizou+OR+%22video+viral%22+OR+%22historia+real%22+OR+%22emocionou+a+web%22+OR+%22resgate+emocionante%22)+when:7d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    },
+    {
+      "nome": "Google News Curiosidades & Descobertas",
+      "url": "https://news.google.com/rss/search?q=(%22descoberta+impressionante%22+OR+%22flagra+inacreditavel%22+OR+%22sobreviveu%22)+when:7d&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    }
+  ],
+  "canais_adaptador": [
+    {
+      "nome": "The Dodo",
+      "channel_id": "UCINb0wqPz-A0dV9nARjJlOQ"
+    },
+    {
+      "nome": "Daily Dose Of Internet",
+      "channel_id": "UCdC0An4ZPNr_YiFiYoVbwaw"
+    },
+    {
+      "nome": "Mark Rober",
+      "channel_id": "UCY1kMZp36IQSyNx_9h4mpCg"
+    },
+    {
+      "nome": "Veritasium",
+      "channel_id": "UCHnyfMqiRRG1u-2MsSQLbXA"
+    },
+    {
+      "nome": "Fatos Desconhecidos",
+      "channel_id": "UCbAiIkPobUFy71zlmwVw3jw"
+    },
+    {
+      "nome": "The Action Lab",
+      "channel_id": "UC1VLQPn9cYSqx8plbk9RxxQ"
+    }
+  ],
+  "canais_corte": [
+    {
+      "nome": "The Dodo",
+      "channel_id": "UCINb0wqPz-A0dV9nARjJlOQ"
+    },
+    {
+      "nome": "Daily Dose Of Internet",
+      "channel_id": "UCdC0An4ZPNr_YiFiYoVbwaw"
+    }
+  ],
+  "yt_busca_adaptador": "incredible rescue emotional true story viral moments",
+  "yt_busca_corte": "most unbelievable moments caught on camera emotional",
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 74,
+    "cor_ativa": "#F97316",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 9,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 5,
+    "margem_inferior": 470
+  },
+  "imagem_ancoras": [
+    "resgate",
+    "historia",
+    "emocionante",
+    "viral",
+    "natureza",
+    "ciencia",
+    "momento"
+  ],
+  "imagem_sufixo_padrao": "real life dramatic moment high resolution photo",
+  "imagem_fallbacks": [
+    "emotional animal rescue real life moment",
+    "dramatic ocean wave nature power photography",
+    "science experiment dramatic reaction lab",
+    "amazing human kindness rescue real story"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é o maior contador de histórias emocionantes do TikTok Brasil. Seu talento é pegar vídeos e acontecimentos virais do mundo todo e narrar com EMOÇÃO DE ARREPIAR (tensão, empatia, reviravolta e desfecho inesquecível), fazendo a pessoa ficar presa até o último segundo e se emocionar ou ficar de queixo caído.",
+    "regras_fatos": "Conte a história real por trás da cena (o antes, o momento crítico e o que aconteceu depois). Nunca invente fatos falsos e dê contexto humano emocionante.",
+    "cta_meio_pt": "Mas antes de ver o desfecho que fez todo mundo se arrepiar, já me segue porque aqui sai história real todo dia.",
+    "hashtags_padrao": [
+      "#HistoriaReal",
+      "#Viralizou",
+      "#Emocionante",
+      "#Curiosidades",
+      "#TikTokBrasil",
+      "#VoceSabia"
+    ]
+  },
+  "top5_banco": [
+    {
+      "slug": "top3_resgates_impossiveis_camera",
+      "tema": "3 resgates impossíveis flagrados em câmera que restauram a fé na humanidade",
+      "foco": "História 3: Em uma estrada alagada no Japão, desconhecidos formam uma corrente humana de seis pessoas para puxar um motorista preso dentro de um carro sendo levado pela enxurrada segundos antes da ponte ceder. História 2: Um cachorro perdido há quase um ano reconhece o cheiro da dona a metros de distância em um abrigo e desaba chorando no colo dela. História 1: Um mergulhador solitário percebe uma baleia jubarte presa em redes de pesca no fundo do mar, corta as cordas por quase uma hora e, ao final, o animal gigante volta para encostar suavemente nele em sinal de gratidão.",
+      "queries": [
+        "flood rescue people helping car dramatic real photo",
+        "dog reunited with owner emotional shelter photo",
+        "diver helping humpback whale underwater ocean photo",
+        "human kindness rescue dramatic moment photography"
+      ]
+    },
+    {
+      "slug": "top3_momentos_natureza_inacreditaveis",
+      "tema": "3 momentos inacreditáveis da natureza capturados em câmera que parecem filme",
+      "foco": "Momento 3: Uma onda gigante de quase trinta metros em Nazaré, Portugal, engolindo o horizonte enquanto um surfista desliza pela parede de água como uma formiga. Momento 2: Um relâmpago vulcânico explodindo dentro de uma nuvem de cinzas durante uma erupção noturna, iluminando o céu inteiro de roxo e laranja. Momento 1: Uma avalancha em câmera lenta nos Alpes onde alpinistas escapam por questão de três segundos graças a um abrigo de rocha natural.",
+      "queries": [
+        "Nazare giant wave surfer ocean dramatic photo",
+        "volcanic lightning eruption night sky dramatic",
+        "alps snow avalanche mountain dramatic photo",
+        "extreme nature weather phenomenon photography"
+      ]
+    }
+  ],
+  "palavras_chave": [
+    "resgate animal",
+    "cachorro",
+    "animal",
+    "emocionante",
+    "salvou",
+    "viralizou"
+  ]
+}

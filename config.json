@@ -1,8 +1,8 @@
 {
-  "nicho_ativo": "gta_vi",
+  "nicho_ativo": "recap_comedia",
   "modo_conteudo": "adaptador_yt",
   "provedor_ia": "gemini",
-  "gemini_modelo": "gemini-flash-lite-latest",
+  "gemini_modelo": "gemini-flash-latest",
   "ollama_url": "http://localhost:11434",
   "ollama_modelo": "qwen3:8b",
   "ollama_timeout": 180,
@@ -19,12 +19,14 @@
     "duracao_alvo_max": 75,
     "duracao_transicao": 0.18,
     "usar_banner_topo": true,
-    "duracao_banner_segundos": 3.0,
+    "duracao_banner_segundos": 4.0,
     "duracao_intro_segundos": 4.5,
-    "volume_musica": 0.20,
+    "volume_musica": 0.2,
     "usar_musica": true,
     "usar_intro": true,
     "usar_broll": true,
-    "limpar_temp": true
+    "limpar_temp": true,
+    "filtro_cor": "vivido2",
+    "formato_tela": "auto"
   }
 }

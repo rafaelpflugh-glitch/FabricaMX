@@ -125,9 +125,19 @@ def build_runtime_config(
             break
 
     merged = copy.deepcopy(base)
+    if isinstance(niche.get("video_override"), dict):
+        merged_video = dict(merged.get("video") or {})
+        merged_video.update(niche["video_override"])
+        merged["video"] = merged_video
+    if niche.get("roteiro_palavras_min"):
+        merged["roteiro_palavras_min"] = int(niche["roteiro_palavras_min"])
+    if niche.get("roteiro_palavras_max"):
+        merged["roteiro_palavras_max"] = int(niche["roteiro_palavras_max"])
     merged["nicho_ativo"] = active_id
     merged["nicho_nome"] = niche.get("nome", active_id)
     merged["nicho_etiqueta"] = niche.get("etiqueta", f"{active_id.upper()} • 9:16")
+    merged["canal_nome"] = niche.get("canal_nome", "")
+    merged["moldura_escura"] = bool(niche.get("moldura_escura", False))
     merged["idioma"] = idioma
     merged["clube_foco"] = foco
     merged["palavras_chave"] = list(palavras)

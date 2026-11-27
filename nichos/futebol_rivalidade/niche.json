@@ -1,0 +1,241 @@
+{
+  "id": "futebol_rivalidade",
+  "nome": "Futebol & Rivalidade (Zoação / Debates BR)",
+  "etiqueta": "RIVALIDADE • 9:16",
+  "modo_padrao": "top5",
+  "idioma_padrao": "pt-BR",
+  "vozes": [
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Masculino • Resenha & Zoação)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Feminino • Corneteira)",
+      "idioma": "pt-BR"
+    }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "Brasil vs Argentina",
+  "presets_foco": {
+    "Clássicos Brasileiros (Geral)": [
+      "Flamengo",
+      "Palmeiras",
+      "Corinthians",
+      "São Paulo",
+      "Grêmio",
+      "Internacional",
+      "Vasco",
+      "Botafogo",
+      "Cruzeiro",
+      "Atlético-MG"
+    ],
+    "Flamengo vs Palmeiras": [
+      "Flamengo",
+      "Palmeiras",
+      "Abel Ferreira",
+      "Arrascaeta",
+      "Libertadores",
+      "Brasileirão"
+    ],
+    "Corinthians vs Palmeiras (Derby)": [
+      "Corinthians",
+      "Palmeiras",
+      "Derby",
+      "Neo Química Arena",
+      "Allianz Parque",
+      "Mundial"
+    ],
+    "Grêmio vs Inter (Gre-Nal)": [
+      "Grêmio",
+      "Internacional",
+      "Gre-Nal",
+      "Beira-Rio",
+      "Arena do Grêmio",
+      "Libertadores"
+    ],
+    "Real Madrid vs Barcelona": [
+      "Real Madrid",
+      "Barcelona",
+      "Vini Jr",
+      "Yamal",
+      "Champions League",
+      "El Clásico"
+    ],
+    "Brasil vs Argentina": [
+      "Seleção Brasileira",
+      "Argentina",
+      "Messi",
+      "Neymar",
+      "Copa do Mundo",
+      "Copa América"
+    ]
+  },
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "futebol brasileiro polêmica clássico provocação",
+  "rss_feeds": [
+    {
+      "nome": "GE Futebol (Direto)",
+      "url": "https://ge.globo.com/rss/ge/futebol/"
+    },
+    {
+      "nome": "UOL Esporte (Direto)",
+      "url": "https://rss.uol.com.br/feed/esporte.xml"
+    },
+    {
+      "nome": "Terra Esportes (Direto)",
+      "url": "https://www.terra.com.br/esportes/rss.xml"
+    }
+  ],
+  "canais_adaptador": [
+    {
+      "nome": "TNT Sports Brasil",
+      "channel_id": "UCs-6sCz2LJm1PrWQN4ErsPw"
+    },
+    {
+      "nome": "ESPN Brasil",
+      "channel_id": "UCw5-xj3AKqEizC7MvHaIPqA"
+    },
+    {
+      "nome": "CazéTV",
+      "channel_id": "UCZiYbVptd3PVPf4f6eR6UaQ"
+    }
+  ],
+  "canais_corte": [
+    {
+      "nome": "TNT Sports Brasil",
+      "channel_id": "UCs-6sCz2LJm1PrWQN4ErsPw"
+    },
+    {
+      "nome": "ESPN Brasil",
+      "channel_id": "UCw5-xj3AKqEizC7MvHaIPqA"
+    }
+  ],
+  "yt_busca_adaptador": "Flamengo Palmeiras Corinthians polemica gols melhores momentos",
+  "yt_busca_corte": "debate futebol brasileiro provocacao TNT Sports ESPN",
+  "legenda": {
+    "fonte": "Impact",
+    "tamanho_fonte": 74,
+    "cor_ativa": "#22C55E",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 9,
+    "sombra": 3,
+    "palavras_por_bloco": 3,
+    "alinhamento": 5,
+    "margem_inferior": 470
+  },
+  "imagem_ancoras": [
+    "futebol",
+    "gol",
+    "estadio",
+    "torcida",
+    "campeao",
+    "jogador",
+    "classico"
+  ],
+  "imagem_sufixo_padrao": "futebol brasileiro jogo estadio gol",
+  "imagem_fallbacks": [
+    "Flamengo jogadores comemorando gol Maracana",
+    "Palmeiras jogadores comemorando gol Allianz Parque",
+    "Corinthians torcida estadio jogo futebol",
+    "Real Madrid Barcelona El Clasico jogo gol"
+  ],
+  "prompt_contexto": {
+    "persona_pt": "Você é o perfil de RESENHA, ZOAÇÃO E RIVALIDADE mais provocador e viciante do futebol brasileiro no TikTok! Seu objetivo é botar fogo na resenha (zoação saudável de arquibancada, sem xingamento pesado) usando fatos reais, números, vices, freguesias e eliminações históricas para fazer as torcidas rivais invadirem os comentários defendendo o próprio time!",
+    "regras_fatos": "Use APENAS fatos, títulos, placares e eliminações reais do futebol. Provoque os dois lados de forma divertida e inteligente para gerar guerra saudável de comentários entre torcedores.",
+    "cta_meio_pt": "Mas antes de soltar a maior alfinetada no número um, já me segue porque aqui a resenha do futebol não perdoa nenhum time!",
+    "hashtags_padrao": [
+      "#FutebolBrasileiro",
+      "#Rivalidade",
+      "#ZoacaoFutebol",
+      "#Brasileirao",
+      "#ResenhaFutebol",
+      "#TikTokEsportes",
+      "#Futebol"
+    ]
+  },
+  "top5_banco": [
+    {
+      "slug": "top5_maiores_provocacoes_classicos_brasil",
+      "tema": "5 provocações e fatos reais dos clássicos brasileiros que fazem qualquer torcedor rival perder a linha",
+      "foco": "Posição 5: A eterna zoação do 'sem Mundial' que corintianos, são-paulinos e flamenguistas nunca deixam o palmeirense esquecer em qualquer discussão. Posição 4: O 7 a 1 e os rebaixamentos de clubes gigantes como Cruzeiro, Grêmio, Inter e Vasco que os rivais lembram toda semana. Posição 3: A virada histórica da final da Libertadores 2021 em Montevidéu com Deyverson roubando a bola de Andreas Pereira e calando o Flamengo. Posição 2: O 5 a 0 do Grêmio no Gre-Nal de 2015 na Arena que até hoje rende meme em Porto Alegre. Posição 1: A briga eterna de quem é o maior clube do Brasil em títulos e torcida entre Flamengo, Palmeiras e São Paulo.",
+      "queries": [
+        "Palmeiras Deyverson gol final Libertadores Flamengo",
+        "Corinthians Palmeiras Derby jogo gol estadio",
+        "Gremio Internacional Gre-Nal jogo estadio gol",
+        "Flamengo torcida Maracana jogo Libertadores",
+        "Sao Paulo Libertadores trofeu campeao estadio"
+      ]
+    },
+    {
+      "slug": "top5_flamengo_vs_palmeiras_quem_manda",
+      "tema": "Flamengo x Palmeiras: 5 fatos que encerram de vez a briga de quem manda no futebol brasileiro",
+      "foco": "Posição 5: O duelo financeiro — os dois únicos clubes que dominaram a última década e deixaram os rivais comendo poeira. Posição 4: A final da Libertadores 2021 vencida pelo Palmeiras por 2 a 1 na prorrogação em cima do próprio Flamengo. Posição 3: A maior torcida do país e o poder absurdo do Flamengo no Maracanã com títulos históricos de Libertadores e Brasileirão. Posição 2: A regularidade assustadora da era Abel Ferreira empilhando taças no Allianz Parque sem precisar trocar de técnico todo semestre. Posição 1: A pergunta que divide o Brasil inteiro — vale mais a hegemonia recente do Palmeiras ou a camisa pesada e o Mundial de 1981 do Flamengo?",
+      "queries": [
+        "Flamengo vs Palmeiras jogo final Libertadores",
+        "Abel Ferreira Palmeiras comemorando titulo trofeu",
+        "Arrascaeta Flamengo comemorando gol Maracana",
+        "Palmeiras Allianz Parque torcida jogo futebol",
+        "Flamengo torcida Maracana festa futebol"
+      ]
+    },
+    {
+      "slug": "top5_corinthians_vs_palmeiras_derby_zoeira",
+      "tema": "Corinthians x Palmeiras: 5 fatos do maior clássico de São Paulo que deixam as duas torcidas espumando",
+      "foco": "Posição 5: Os dois Mundiais do Corinthians em 2000 e 2012, arma número um da Fiel para zoar o rival até hoje. Posição 4: A sequência absurda de títulos recentes do Palmeiras enquanto o Corinthians amargava jejuns e crises na diretoria. Posição 3: As eliminações históricas na Libertadores de 1999 e 2000 onde Marcos brilhou nos pênaltis contra o Timão. Posição 2: O título paulista de 2018 dentro do Allianz Parque com o Corinthians levantando a taça na casa do rival. Posição 1: Quem tem mais história pesada no Derby — a raça da Neo Química Arena ou a máquina de taças do Verdão?",
+      "queries": [
+        "Corinthians Mundial 2012 Chelsea gol Guerrero",
+        "Palmeiras vs Corinthians Derby Allianz Parque jogo",
+        "Corinthians torcida Neo Quimica Arena festa",
+        "Palmeiras goleiro Marcos Libertadores defesa",
+        "Palmeiras campeao trofeu Libertadores estadio"
+      ]
+    },
+    {
+      "slug": "top5_maiores_pipocadas_futebol_brasileiro",
+      "tema": "5 viradas e pipocadas históricas do futebol brasileiro que nenhuma torcida rival perdoa até hoje",
+      "foco": "Posição 5: O Botafogo de 2023 abrindo 13 pontos de vantagem no Brasileirão e deixando o título escapar na reta final para o Palmeiras no 4 a 3 épico do Engenhão. Posição 4: O Flamengo levando o gol de Deyverson na final da Libertadores 2021 quando era apontado como favorito absoluto. Posição 3: O Internacional empatando em casa na última rodada do Brasileirão 2020 e vendo o título escapar por um gol impedido no fim. Posição 2: O Fluminense perdendo a final da Libertadores 2008 nos pênaltis em pleno Maracanã lotado para a LDU. Posição 1: O 7 a 1 da Alemanha no Mineirão, a maior zoeira eterna que até os argentinos usam contra a Seleção Brasileira.",
+      "queries": [
+        "Botafogo Palmeiras 3x4 Endrick gol Brasileirao",
+        "Deyverson gol Palmeiras Flamengo Libertadores 2021",
+        "Internacional Beira Rio Brasileirao jogo dramatico",
+        "Fluminense Maracana Libertadores torcida estadio",
+        "Brasil Alemanha Copa do Mundo 2014 Mineirao"
+      ]
+    },
+    {
+      "slug": "top5_real_madrid_vs_barcelona_humilhacoes",
+      "tema": "Real Madrid x Barcelona: 5 goleadas e humilhações do El Clásico que nenhum torcedor esquece",
+      "foco": "Posição 5: O 5 a 0 do Barcelona de Guardiola e Messi em cima do Real Madrid de Mourinho no Camp Nou em 2010. Posição 4: O 4 a 0 do Real Madrid em pleno Camp Nou na Copa do Rei com hat-trick de Benzema calando o estádio. Posição 3: O 6 a 2 histórico do Barcelona dentro do Santiago Bernabéu em 2009. Posição 2: A hegemonia absurda das 15 Champions League do Real Madrid que os madridistas jogam na cara de qualquer culé. Posição 1: A briga que nunca acaba — quem teve o auge mais absurdo, o Barcelona do trio MSN e Messi ou o Real Madrid imortal das viradas na Champions?",
+      "queries": [
+        "Barcelona vs Real Madrid El Clasico gol estadio",
+        "Lionel Messi Barcelona comemorando gol Bernabeu",
+        "Vinicius Junior Real Madrid gol Champions League",
+        "Real Madrid trofeu Champions League comemoracao",
+        "Lamine Yamal Barcelona jogo El Clasico gol"
+      ]
+    },
+    {
+      "slug": "top5_brasil_vs_argentina_guerra_comentarios",
+      "tema": "Brasil x Argentina: 5 fatos e provocações que fazem os dois países entrarem em guerra nos comentários",
+      "foco": "Posição 5: O penta mundial do Brasil — cinco estrelas no peito contra três da Argentina, argumento número um dos brasileiros. Posição 4: A derrota do Brasil na final da Copa América 2021 em pleno Maracanã com gol de Di María. Posição 3: O título mundial de Messi no Catar em 2022 encerrando décadas de jejum argentino e incendiando a rivalidade. Posição 2: A humilhação do 3 a 0 na final da Copa América 2007 com time reserva brasileiro atropelando a Argentina de Messi e Riquelme. Posição 1: A pergunta proibida que quebra a internet — Pelé rei absoluto com 3 Copas ou Messi o maior da história?",
+      "queries": [
+        "Brasil Argentina jogo futebol estadio classico",
+        "Pele Selecao Brasileira Copa do Mundo trofeu",
+        "Lionel Messi Argentina Copa do Mundo trofeu",
+        "Neymar Brasil Argentina jogo futebol lance",
+        "Maracana Brasil Argentina final Copa America"
+      ]
+    }
+  ],
+  "palavras_chave": [
+    "Seleção Brasileira",
+    "Argentina",
+    "Messi",
+    "Neymar",
+    "Copa do Mundo",
+    "Copa América"
+  ]
+}
