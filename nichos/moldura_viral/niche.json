@@ -2,7 +2,7 @@
   "id": "moldura_viral",
   "nome": "Moldura Viral (Garotas Góticas • Estilo Página ✓)",
   "etiqueta": "GÓTICAS BR • MOLDURA",
-  "canal_nome": "GÓTICAS BR",
+  "canal_nome": "Noite Alt",
   "moldura_escura": false,
   "modo_padrao": "moldura_viral",
   "idioma_padrao": "pt-BR",
@@ -104,5 +104,6 @@
     "goth aesthetic",
     "goth fashion",
     "alt style"
-  ]
+  ],
+  "canal_handle": "@noitealt"
 }

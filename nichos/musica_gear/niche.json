@@ -5,18 +5,64 @@
   "modo_padrao": "adaptador_yt",
   "idioma_padrao": "pt-BR",
   "vozes": [
-    { "id": "pt-BR-AntonioNeural", "label": "PT-BR • Antonio (Masculino)", "idioma": "pt-BR" },
-    { "id": "pt-BR-FranciscaNeural", "label": "PT-BR • Francisca (Feminino)", "idioma": "pt-BR" },
-    { "id": "en-US-AndrewNeural", "label": "EN-US • Andrew (RPM Dólar)", "idioma": "en-US" },
-    { "id": "en-US-GuyNeural", "label": "EN-US • Guy (Energetic)", "idioma": "en-US" },
-    { "id": "es-MX-JorgeNeural", "label": "ES-MX • Jorge (LATAM)", "idioma": "es-MX" }
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Masculino)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Feminino)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "en-US-AndrewNeural",
+      "label": "EN-US • Andrew (RPM Dólar)",
+      "idioma": "en-US"
+    },
+    {
+      "id": "en-US-GuyNeural",
+      "label": "EN-US • Guy (Energetic)",
+      "idioma": "en-US"
+    },
+    {
+      "id": "es-MX-JorgeNeural",
+      "label": "ES-MX • Jorge (LATAM)",
+      "idioma": "es-MX"
+    }
   ],
   "voz_padrao": "pt-BR-AntonioNeural",
   "foco_padrao": "Guitarras & Pedais",
   "presets_foco": {
-    "Guitarras & Pedais": ["guitarra", "pedal", "pedais", "guitar", "pedalboard", "tone", "amp", "Rig Rundown"],
-    "Bandas & Lendas do Rock": ["rock", "banda", "Pink Floyd", "Nirvana", "Metallica", "Led Zeppelin", "Jack White", "Slash"],
-    "Segredos de Estúdio": ["estúdio", "gravação", "timbre", "recording", "riff", "album", "produtor"]
+    "Guitarras & Pedais": [
+      "guitarra",
+      "pedal",
+      "pedais",
+      "guitar",
+      "pedalboard",
+      "tone",
+      "amp",
+      "Rig Rundown"
+    ],
+    "Bandas & Lendas do Rock": [
+      "rock",
+      "banda",
+      "Pink Floyd",
+      "Nirvana",
+      "Metallica",
+      "Led Zeppelin",
+      "Jack White",
+      "Slash"
+    ],
+    "Segredos de Estúdio": [
+      "estúdio",
+      "gravação",
+      "timbre",
+      "recording",
+      "riff",
+      "album",
+      "produtor"
+    ]
   },
   "ddgs_regiao": "br-pt",
   "ddgs_news_sufixo": "guitarra pedais rock musica noticias",
@@ -35,14 +81,32 @@
     }
   ],
   "canais_adaptador": [
-    { "nome": "Tone Lab", "channel_id": "UCIURUVGapg73JfhG6ixpa_w" },
-    { "nome": "Premier Guitar (Rig Rundown)", "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ" },
-    { "nome": "Rick Beato", "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q" }
+    {
+      "nome": "Tone Lab",
+      "channel_id": "UCIURUVGapg73JfhG6ixpa_w"
+    },
+    {
+      "nome": "Premier Guitar (Rig Rundown)",
+      "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ"
+    },
+    {
+      "nome": "Rick Beato",
+      "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q"
+    }
   ],
   "canais_corte": [
-    { "nome": "Tone Lab", "channel_id": "UCIURUVGapg73JfhG6ixpa_w" },
-    { "nome": "Premier Guitar (Rig Rundown)", "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ" },
-    { "nome": "Rick Beato", "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q" }
+    {
+      "nome": "Tone Lab",
+      "channel_id": "UCIURUVGapg73JfhG6ixpa_w"
+    },
+    {
+      "nome": "Premier Guitar (Rig Rundown)",
+      "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ"
+    },
+    {
+      "nome": "Rick Beato",
+      "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q"
+    }
   ],
   "yt_busca_adaptador": "maiores guitarristas pedais guitarra historia rock tone lab",
   "yt_busca_corte": "explicando maiores guitarristas pedais rock tone lab",
@@ -58,7 +122,17 @@
     "alinhamento": 2,
     "margem_inferior": 395
   },
-  "imagem_ancoras": ["guitar", "guitarra", "pedal", "pedalboard", "amplifier", "band", "rock", "concert", "studio"],
+  "imagem_ancoras": [
+    "guitar",
+    "guitarra",
+    "pedal",
+    "pedalboard",
+    "amplifier",
+    "band",
+    "rock",
+    "concert",
+    "studio"
+  ],
   "imagem_sufixo_padrao": "electric guitar pedals rock musician live stage",
   "imagem_fallbacks": [
     "electric guitar pedalboard stage rock concert live",
@@ -75,7 +149,14 @@
     "cta_meio_pt": "Mas antes de ouvir o segredo mais absurdo do final, já me segue porque aqui sai todo dia bastidor de música e guitarra.",
     "cta_meio_en": "Before I reveal the craziest gear secret at the end, hit follow for daily guitar and music stories.",
     "cta_meio_es": "Pero antes del secreto más loco del final, sígueme porque aquí salen historias de guitarras y bandas todos los días.",
-    "hashtags_padrao": ["#Guitarra", "#PedaisDeGuitarra", "#Rock", "#Musica", "#GuitarGear", "#TikTokMusica"]
+    "hashtags_padrao": [
+      "#Guitarra",
+      "#PedaisDeGuitarra",
+      "#Rock",
+      "#Musica",
+      "#GuitarGear",
+      "#TikTokMusica"
+    ]
   },
   "top5_banco": [
     {
@@ -104,5 +185,7 @@
         "guitar pedalboard effects pedals stage closeup"
       ]
     }
-  ]
+  ],
+  "canal_nome": "Timbre Bruto",
+  "canal_handle": "@timbrebruto"
 }
