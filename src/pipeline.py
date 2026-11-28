@@ -12,6 +12,7 @@ from typing import Any, Callable
 from src import HISTORY_PATH, TEMP_DIR, append_history
 from src.highlights_engine import run_highlights_pro_pipeline
 from src.meme_frame_engine import run_moldura_viral_pipeline
+from src.story_engine import run_long_story_pipeline
 from src.media_fetcher import fetch_and_prepare_images, fetch_images_for_scenes
 from src.scene_matcher import index_video_pool, match_scenes_to_narration
 from src.scraper import NewsArticle, fetch_next_news
@@ -121,6 +122,45 @@ class FabricaPipeline:
             modo = str(self.config.get("modo_conteudo", "noticia")).strip().lower()
             custom_video_url = str(self.config.get("video_url_opcional") or "").strip()
             placar_texto = str(self.config.get("placar_opcional") or "").strip()
+
+            # ==================== MODO HISTÓRIA LONGA YOUTUBE 16:9 (+ THUMB + SHORT 9:16) ====================
+            if modo == "historia_longa":
+                self._check_cancelled()
+                self._progress(1, f"{prefix}1/5 História Longa (Bíblia + Capítulos)", 0.08)
+                self._log(f"{prefix}Modo História Longa YouTube 16:9 + Thumbnail High-CTR + Teaser 9:16 [{niche_name}]...")
+
+                def _on_st_pct(ratio: float) -> None:
+                    self._progress(5, f"{prefix}5/5 Render 16:9 ({int(ratio * 100)}%)", 0.55 + 0.45 * ratio)
+
+                st_res = run_long_story_pipeline(
+                    config=self.config,
+                    work_dir=job_dir,
+                    exclude_urls=exclude_urls,
+                    log_cb=self._log,
+                    progress_cb=_on_st_pct,
+                    stop_event=self.stop_event,
+                )
+                article = st_res.article
+                script = st_res.script
+                if self.on_preview:
+                    self.on_preview(article, script)
+                if st_res.mp4_path.exists() and st_res.mp4_path.stat().st_size > 10_000:
+                    append_history(
+                        url=article.url,
+                        title=article.title,
+                        source=article.source,
+                        output_file=st_res.mp4_path.name,
+                        history_path=history_path,
+                    )
+                self._progress(5, f"{prefix}Concluído!", 1.0)
+                return BatchItemResult(
+                    index=batch_index,
+                    success=True,
+                    article=article,
+                    script=script,
+                    mp4_path=st_res.mp4_path,
+                    txt_path=st_res.txt_path,
+                )
 
             # ==================== MODO MOLDURA PÁGINA VIRAL (LOGO + SELO ✓ + FRASE + VÍDEO) ====================
             if modo == "moldura_viral":

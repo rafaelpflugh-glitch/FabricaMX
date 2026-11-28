@@ -1,0 +1,127 @@
+{
+  "id": "historias_virais",
+  "nome": "Histórias & Reviravoltas (YouTube 16:9 • Hypados)",
+  "etiqueta": "DESTINO & VIRADA • 16:9",
+  "canal_nome": "Destino & Virada",
+  "canal_handle": "@destinoevirada",
+  "modo_padrao": "historia_longa",
+  "idioma_padrao": "pt-BR",
+  "duracao_historia_minutos": 8,
+  "gerar_teaser_short": true,
+  "vozes": [
+    {
+      "id": "pt-BR-AntonioNeural",
+      "label": "PT-BR • Antonio (Narrador Calmo & Emocional)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "pt-BR-FranciscaNeural",
+      "label": "PT-BR • Francisca (Narradora Emocional)",
+      "idioma": "pt-BR"
+    },
+    {
+      "id": "es-MX-JorgeNeural",
+      "label": "ES-MX • Jorge (Historias Virales LATAM/EUA)",
+      "idioma": "es-MX"
+    },
+    {
+      "id": "en-US-AndrewNeural",
+      "label": "EN-US • Andrew (High-RPM US Storytelling)",
+      "idioma": "en-US"
+    }
+  ],
+  "voz_padrao": "pt-BR-AntonioNeural",
+  "foco_padrao": "Humilhação → Reviravolta Silenciosa (Karma)",
+  "presets_foco": {
+    "Humilhação → Reviravolta Silenciosa (Karma)": [
+      "ex-noiva",
+      "motorista",
+      "chefe arrogante",
+      "reviravolta",
+      "dignidade"
+    ],
+    "Trabalhador Humilde / Aposentado Subestimado": [
+      "vigia",
+      "porteiro aposentado",
+      "faxineira",
+      "demitido injustamente",
+      "empresa"
+    ],
+    "Ato de Bondade Recompensado": [
+      "caixa de supermercado",
+      "idosa humilde",
+      "pai solteiro",
+      "envelope",
+      "gratidão"
+    ],
+    "Família, Herança & Justiça": [
+      "pai viúvo",
+      "filho ingrato",
+      "testamento",
+      "fazenda",
+      "revelação"
+    ]
+  },
+  "temas_virais_banco": [
+    {
+      "slug": "uber_ex_noiva_clinica",
+      "premissa": "Um ex-gerente de banco demitido que virou motorista de aplicativo encontra a ex-noiva arrogante no aeroporto 6 anos depois; ela debocha dele a viagem inteira sem saber que ele montou uma frota própria especializada em transportar idosos de uma clínica e que a mãe dela é uma das pacientes atendidas de graça por ele.",
+      "cenario": "São Paulo/SP"
+    },
+    {
+      "slug": "porteiro_aposentado_sindica",
+      "premissa": "Uma síndica arrogante humilha e demite o porteiro de 62 anos dizendo que ele está velho e não serve pra nada; 6 dias depois o condomínio sofre uma pane elétrica e de segurança que 5 técnicos caros não resolvem, até descobrirem que ele era engenheiro aposentado e o único que conhecia a planta original do prédio.",
+      "cenario": "Curitiba/PR"
+    },
+    {
+      "slug": "caixa_mercado_leite_pai_solteiro",
+      "premissa": "Uma caixa de supermercado humilde paga do próprio bolso o leite e as fraldas de um pai solteiro desesperado que teve o cartão recusado e foi humilhado pelo gerente; 5 dias depois ele volta com um envelope e muda o destino dela e do filho pequeno para sempre.",
+      "cenario": "Belo Horizonte/MG"
+    },
+    {
+      "slug": "vigia_noturno_demitido_mentira",
+      "premissa": "Um vigia noturno de 21 anos de empresa é demitido por uma armação do diretor financeiro para encobrir um desvio; 9 dias depois a auditoria e a polícia batem na porta do vigia porque só ele tinha os cadernos com as anotações de todas as placas e horários que salvaram a fábrica da falência.",
+      "cenario": "Campinas/SP"
+    },
+    {
+      "slug": "mecanico_idoso_empresario_estrada",
+      "premissa": "Um empresário rico humilha um mecânico simples de beira de estrada chamando a oficina dele de sucata; dias depois, numa reunião decisiva para comprar uma transportadora milionária, o empresário entra na sala e congela ao ver quem está sentado na cadeira da presidência.",
+      "cenario": "Goiânia/GO"
+    },
+    {
+      "slug": "costureira_vestido_festa_gala",
+      "premissa": "A nora rica humilha a sogra costureira simples na frente das amigas e a proíbe de sentar na mesa principal do casamento; na hora dos agradecimentos no palco, a estilista famosa que doou o espaço e o vestido revela que aprendeu tudo com aquela senhora.",
+      "cenario": "Porto Alegre/RS"
+    }
+  ],
+  "ddgs_regiao": "br-pt",
+  "ddgs_news_sufixo": "dramatic cinematic portrait everyday life",
+  "rss_feeds": [],
+  "canais_adaptador": [],
+  "canais_corte": [],
+  "legenda": {
+    "fonte": "Arial",
+    "tamanho_fonte": 44,
+    "cor_ativa": "#FDE047",
+    "cor_inativa": "#FFFFFF",
+    "cor_contorno": "#000000",
+    "espessura_contorno": 4,
+    "sombra": 2,
+    "palavras_por_bloco": 7,
+    "alinhamento": 2,
+    "margem_inferior": 55
+  },
+  "prompt_contexto": {
+    "persona_pt": "Você é um escritor mestre em storytelling emocional brasileiro em primeira pessoa (estilo 'Emoções e Destinos'), criando histórias hiper-realistas, humanas e viciantes de dignidade, karma silencioso e reviravolta emocionante.",
+    "persona_es": "Eres un maestro del storytelling emocional en primera persona creando historias hiperrealistas de dignidad, humildad y giros inolvidables.",
+    "persona_en": "You are a master first-person emotional storyteller writing gripping, hyper-realistic stories of quiet dignity, karma, and unforgettable plot twists.",
+    "hashtags_padrao": [
+      "#HistoriasDeVida",
+      "#Reviravolta",
+      "#HistoriasEmocionantes",
+      "#Superacao",
+      "#Karma",
+      "#DestinoEVirada"
+    ]
+  }
+}

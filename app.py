@@ -44,6 +44,7 @@ ACCENT_DANGER_HOVER = "#DC2626"
 ACCENT_GREEN = "#22C55E"
 
 MODE_LABELS = {
+    "historia_longa": "História Longa YouTube (16:9 + Thumb + Short)",
     "moldura_viral": "Moldura Página Viral (Logo + Selo ✓ + Frase)",
     "highlights_pro": "Highlights Futebol Pro (Áudio Original nos Gols)",
     "adaptador_yt": "Adaptador YouTube (IGN / Gameranx / Recap)",
