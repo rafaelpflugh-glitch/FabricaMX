@@ -35,15 +35,17 @@
     }
   ],
   "canais_adaptador": [
+    { "nome": "Tone Lab", "channel_id": "UCIURUVGapg73JfhG6ixpa_w" },
     { "nome": "Premier Guitar (Rig Rundown)", "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ" },
     { "nome": "Rick Beato", "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q" }
   ],
   "canais_corte": [
+    { "nome": "Tone Lab", "channel_id": "UCIURUVGapg73JfhG6ixpa_w" },
     { "nome": "Premier Guitar (Rig Rundown)", "channel_id": "UC5J-hZ4wNf7OlkzIn49LHoQ" },
     { "nome": "Rick Beato", "channel_id": "UCJquYOG5EL82sKTfH9aMA9Q" }
   ],
-  "yt_busca_adaptador": "famous guitar tone cheap gear pedals rig rundown",
-  "yt_busca_corte": "guitar pedals famous tone studio secret",
+  "yt_busca_adaptador": "maiores guitarristas pedais guitarra historia rock tone lab",
+  "yt_busca_corte": "explicando maiores guitarristas pedais rock tone lab",
   "legenda": {
     "fonte": "Impact",
     "tamanho_fonte": 82,
